@@ -58,6 +58,43 @@ Every state file is wrapped in a Jinja guard so any category can be disabled by 
 
 **Stdlib only.** The script has no third-party dependencies and runs on any Python 3, including the Python bundled with an MLM server.
 
+## Current coverage
+
+Latest run against the full `ssg-sle15-ds.xml` datastream, profile `pci-dss-4` (PCI-DSS v4.0.1), MAC framework AppArmor:
+
+| Metric | Count |
+|---|---|
+| Rules selected by profile | 262 |
+| **Remediable** (coverage denominator) | **238** |
+| No remediation shipped (detective-only) | 18 |
+| N/A for AppArmor (covered by MAC equivalence) | 6 |
+
+**Native coverage: 206 / 238 remediable rules — 86%** (of which 13 guarded operational states; 32 remediable rules remain unmapped).
+
+Coverage by category:
+
+| Category | Rules |
+|---|---|
+| File permissions & ownership | 53 |
+| Audit (auditd rules + auditd.conf) | 49 |
+| Package install / removal | 22 |
+| SSH server hardening | 17 |
+| Config-file settings (login.defs, securetty, etc.) | 13 |
+| Kernel parameters (sysctl) | 12 |
+| Service enable / disable | 8 |
+| GNOME desktop (dconf) policy | 7 |
+| PAM module arguments (pwquality, pam_unix, pam_wheel) | 6 |
+| Package signatures & verification (RPM/GPG) | 4 |
+| Disabled kernel modules | 3 |
+| sudo Defaults (sudoers.d drop-ins) | 3 |
+| systemd core dump policy | 2 |
+| GRUB kernel command-line arguments | 2 |
+| Firewall (iptables loopback rules) | 2 |
+| File integrity (AIDE) | 2 |
+| Resource limits (security/limits.d) | 1 |
+
+Regenerate these numbers any time with `./scap2salt.py --report-only` (writes `out/coverage-report.md`).
+
 ## Usage
 
 ```bash
