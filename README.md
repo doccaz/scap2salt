@@ -18,14 +18,20 @@ out/srv/
 │       ├── permissions.sls        # file ownership & modes
 │       ├── kernel_modules.sls     # disabled modules (modprobe.d)
 │       ├── sshd.sls               # SSH drop-in config
-│       ├── lineinfile.sls         # login.defs, PAM, misc config lines
-│       ├── audit.sls              # auditd rules (augenrules)
+│       ├── lineinfile.sls         # login.defs, securetty, tmout, chrony
+│       ├── pam.sls                # PAM module arguments (pwquality, etc.)
+│       ├── sudo.sls               # sudo Defaults (sudoers.d drop-ins)
+│       ├── audit.sls              # auditd rules + auditd.conf settings
 │       ├── dconf.sls              # GNOME desktop policy
+│       ├── coredump.sls           # systemd core dump policy
+│       ├── grub.sls               # GRUB kernel command-line args
+│       ├── firewall.sls           # iptables loopback rules
 │       ├── aide.sls               # file integrity (AIDE)
 │       ├── rpm.sls                # GPG checks & RPM verification
 │       ├── mounts.sls             # filesystem mount options
 │       ├── mac.sls                # SELinux or AppArmor enforcement
-│       ├── UNMAPPED.md            # rules with no native handler
+│       ├── UNMAPPED.md            # rules with a fix we don't yet parse
+│       ├── NO_REMEDIATION.md      # rules the SSG ships no fix for (detective-only)
 │       ├── SKIPPED_NA.md          # rules N/A for this MAC framework
 │       ├── MAC_EQUIVALENCE.md     # AppArmor ↔ SELinux control mapping
 │       └── _verify/
@@ -44,7 +50,9 @@ Every state file is wrapped in a Jinja guard so any category can be disabled by 
 
 ## Design principles
 
-**Native states only.** Each SCAP rule is mapped to a first-class Salt state (`sysctl.present`, `pkg.installed`, `service.running`, `file.managed`, `mount.mounted`, etc.). Rules for which no declarative primitive exists are either emitted as guarded `cmd.run` states (idempotent via `creates`/`onlyif`/`unless`) or listed in `UNMAPPED.md`. Nothing is silently wrapped in a bare `cmd.run`.
+**Native states only.** Each SCAP rule is mapped to a first-class Salt state (`sysctl.present`, `pkg.installed`, `service.running`, `file.managed`, `iptables.append`, `mount.mounted`, etc.). Rules for which no declarative primitive exists are either emitted as guarded `cmd.run` states (idempotent via `creates`/`onlyif`/`unless`) or listed in `UNMAPPED.md`. Nothing is silently wrapped in a bare `cmd.run`.
+
+**Honest coverage.** Rules the SSG ships *no remediation* for (detective-only checks like account uniqueness, BIOS settings, firewall-zone design) are separated into `NO_REMEDIATION.md` and excluded from the coverage denominator — the headline percentage reflects rules that *can* be remediated, not rules a handler merely hasn't been written for yet. `UNMAPPED.md` is strictly "has a fix we don't yet parse."
 
 **MAC framework awareness.** SLE 15/Leap 15 ships AppArmor; SLE 16+ ships SELinux. SELinux-specific SCAP rules are automatically marked N/A on AppArmor targets, and `mac.sls` instead enforces the equivalent control intent via AppArmor. The mapping is documented in `MAC_EQUIVALENCE.md`.
 
@@ -120,6 +128,7 @@ Each active rule is passed through an ordered list of **mappers**. The first map
 | `m_securetty` | `no_direct_root_logins`, `securetty_root_login_console_only` | `file.managed`/`file.replace` on `/etc/securetty` |
 | `m_tmout` | `accounts_tmout` | `file.managed` writing `/etc/profile.d/autologout.sh` |
 | `m_chrony` | `chronyd_specify_remote_server` | `file.replace` ensuring a `pool`/`server` line in `/etc/chrony.conf` |
+| `m_iptables` | `set_loopback_traffic`, `set_ipv6_loopback_traffic` | `iptables.append` states (idempotent, `save: True`) for the loopback rules |
 | `m_dconf` | `dconf_*` | `file.managed` writing a settings fragment + lock fragment to the dconf db dir; `dconf update` triggered on any change |
 | `m_aide` | `aide_build_database`, `aide_periodic_checking_systemd_timer` | guarded `cmd.run` (database init) and `file.managed` (systemd unit + timer) |
 | `m_rpm` | `ensure_gpgcheck_*`, `ensure_suse_gpgkey_*`, `rpm_verify_*` | `file.replace` on `/etc/zypp/zypp.conf`, guarded `cmd.run` for per-repo and per-package checks |

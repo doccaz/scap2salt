@@ -59,6 +59,10 @@ pci_dss:
     $type: boolean
     $default: True
     $name: "GRUB kernel command-line arguments"
+  firewall:
+    $type: boolean
+    $default: True
+    $name: "Firewall (iptables loopback rules)"
   aide:
     $type: boolean
     $default: True

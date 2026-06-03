@@ -104,6 +104,7 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_securetty` | `no_direct_root_logins`, `securetty_root_login_console_only` | `lineinfile` |
 | `m_tmout` | `accounts_tmout` (`/etc/profile.d/autologout.sh`) | `lineinfile` |
 | `m_chrony` | `chronyd_specify_remote_server` (`/etc/chrony.conf`) | `lineinfile` |
+| `m_iptables` | `set_loopback_traffic`, `set_ipv6_loopback_traffic` | `firewall` |
 | `m_dconf` | `dconf_*` | `dconf` |
 | `m_aide` | `aide_build_database`, `aide_periodic_checking_systemd_timer` | `aide` |
 | `m_rpm` | `ensure_gpgcheck_*`, `ensure_suse_gpgkey_*`, `rpm_verify_*` | `rpm` |
@@ -117,6 +118,14 @@ PAM module-argument rules have no declarative primitive in core Salt (no `pam` s
 ### `shell_resolve()`
 
 Several handlers (`m_auditd_conf`, `m_sudoers`, `m_grub_audit`, `m_pam`) read a literal that still contains a `$var_*` / `${var_*}` reference. `shell_resolve(val, bash)` substitutes each with the value of its in-script assignment (`var_x='...'`). This complements the XCCDF `<sub>` resolution: `<sub>` fills the variable's *assignment*, `shell_resolve()` expands a later *reference* to it.
+
+### Firewall handler (`m_iptables`) — one rule, several states
+
+`m_iptables` handles only the two loopback-traffic rules (`set_loopback_traffic` IPv4, `set_ipv6_loopback_traffic` IPv6). Each ships three `ip[6]tables -A CHAIN … -j TARGET` lines; the handler translates each into an `iptables.append` state (`-i`→`in-interface`, `-o`→`out-interface`, `-s`→`source`, `-j`→`jump`, with `family` and `save: True`). Because `map_rule()` returns a single `SaltState`, the first line becomes the main state and the rest are attached as `extra_states`. **Caveat:** SLE 15 defaults to firewalld/nftables; these raw iptables rules are faithful to the SCAP check but may need firewalld-coexistence review — a note to that effect is emitted at the top of `firewall.sls`. The other four firewall rules in the PCI baseline (`set_firewalld_default_zone`, `set_ip6tables_default_rule`, `nftables_ensure_default_deny_policy`, `ensure_firewall_rules_for_open_ports`) ship **no fix** and land in `NO_REMEDIATION.md`.
+
+### "No remediation shipped" classification
+
+`RuleInfo.has_fix` is `True` if the rule carries any `<fix>` element (shell *or* Ansible). In `main()`, an unmapped rule with `has_fix == False` goes to the `noremed` bucket instead of `unmapped`: the SSG ships nothing to automate (detective-only rules like uniqueness checks, BIOS settings, firewall design). These are written to `NO_REMEDIATION.md` and **excluded from the coverage denominator** — so the headline percentage reflects *remediable* rules, not rules we merely haven't written a handler for. `UNMAPPED.md` now means strictly "has a fix we don't yet parse."
 
 ### SaltState rendering
 
@@ -152,7 +161,8 @@ The rationale is documented per rule in `MAC_EQUIVALENCE.md` (written alongside 
 | `emit_tree()` | Full state tree under `out/srv/` |
 | `emit_apparmor_mac()` | `mac.sls` + `MAC_EQUIVALENCE.md` for AppArmor targets |
 | `emit_na()` | `SKIPPED_NA.md` listing N/A rules |
-| `emit_unmapped()` | `UNMAPPED.md` listing rules with no handler |
+| `emit_unmapped()` | `UNMAPPED.md` listing rules that have a fix we don't yet parse |
+| `emit_noremed()` | `NO_REMEDIATION.md` listing rules the SSG ships no fix for (detective-only) |
 | `emit_readme()` | `README.md` inside the generated state dir (deploy instructions) |
 | `emit_verify()` | Three shell scripts in `_verify/` |
 | `emit_formula()` | `form.yml` + `metadata.yml` for MLM Formulas tab |
