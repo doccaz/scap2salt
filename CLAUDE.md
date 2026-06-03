@@ -15,6 +15,23 @@ Default use case: generate PCI-DSS v4 enforcement states for SLE 15 with AppArmo
 
 ---
 
+## Current coverage snapshot
+
+Latest full run — `ssg-sle15-ds.xml`, profile `pci-dss-4` (PCI-DSS v4.0.1), AppArmor:
+
+| Metric | Count |
+|---|---|
+| Rules selected by profile | 262 |
+| Remediable (coverage denominator) | 238 |
+| No remediation shipped (detective-only) | 18 |
+| N/A for AppArmor (MAC equivalence) | 6 |
+
+**Native coverage: 206/238 remediable (86%)** — 13 guarded operational states, 32 remediable rules still unmapped.
+
+Regenerate with `./scap2salt.py --report-only` (writes `out/coverage-report.md`). Keep these numbers in sync with the README's "Current coverage" section when handlers change.
+
+---
+
 ## Key concepts and acronyms
 
 | Term | Meaning |
