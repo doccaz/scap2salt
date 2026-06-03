@@ -1,0 +1,13 @@
+# Downloaded SSG datastream cache (large, regenerable)
+.cache/
+
+# Generated output trees (regenerable via scap2salt.py)
+out/
+out-*/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local Claude Code settings
+.claude/

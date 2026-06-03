@@ -1,0 +1,3 @@
+description: "PCI-DSS v4 hardening generated from xccdf_org.ssgproject.content_profile_pci-dss-4 (MAC: apparmor)"
+group: Security & Compliance
+after: []

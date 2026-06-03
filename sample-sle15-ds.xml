@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Benchmark xmlns="http://checklists.nist.gov/xccdf/1.2"
+           id="xccdf_org.ssgproject.content_benchmark_SLE-15">
+  <title>Guide to the Secure Configuration of SUSE Linux Enterprise 15 (fixture)</title>
+
+  <Profile id="xccdf_org.ssgproject.content_profile_pci-dss-4">
+    <title>PCI-DSS v4 Control Baseline for SUSE Linux Enterprise 15</title>
+    <select idref="xccdf_org.ssgproject.content_rule_sysctl_net_ipv4_conf_all_rp_filter" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_package_telnet_removed" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_service_auditd_enabled" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_file_permissions_sshd_config" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_file_groupowner_etc_shadow" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_kernel_module_usb_storage_disabled" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_sshd_disable_root_login" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_mount_option_tmp_nodev" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_accounts_tmout" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_accounts_maximum_age_login_defs" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_chmod" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_audit_rules_login_events_lastlog" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_sshd_set_idle_timeout" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_sshd_rekey_limit" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_selinux_state" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_selinux_policytype" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_grub2_enable_selinux" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_package_libselinux_installed" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_audit_rules_mac_modification_etc_selinux" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_dconf_gnome_screensaver_idle_delay" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_package_aide_installed" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_aide_build_database" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_aide_periodic_checking_systemd_timer" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_ensure_gpgcheck_globally_activated" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_ensure_gpgcheck_never_disabled" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_ensure_suse_gpgkey_installed" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_rpm_verify_permissions" selected="true"/>
+    <select idref="xccdf_org.ssgproject.content_rule_rpm_verify_hashes" selected="true"/>
+  </Profile>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_sysctl_net_ipv4_conf_all_rp_filter" severity="medium">
+    <title>Enable Kernel Parameter rp_filter on all IPv4 Interfaces</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">1.4.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+sysctl_value="1"
+if [ -z "$(grep -P '^\s*net.ipv4.conf.all.rp_filter' /etc/sysctl.conf)" ] ; then :; fi
+/sbin/sysctl -q -n -w net.ipv4.conf.all.rp_filter="1"
+printf '%s\n' "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.d/net_ipv4_conf_all_rp_filter.conf
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_package_telnet_removed" severity="high">
+    <title>Remove telnet Package</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">2.2.4</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+if rpm -q --quiet "telnet" ; then
+    zypper remove -y "telnet"
+fi
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_service_auditd_enabled" severity="medium">
+    <title>Enable auditd Service</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">10.2.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+SYSTEMCTL_EXEC='/usr/bin/systemctl'
+"$SYSTEMCTL_EXEC" unmask 'auditd.service'
+"$SYSTEMCTL_EXEC" start 'auditd.service'
+"$SYSTEMCTL_EXEC" enable 'auditd.service'
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_file_permissions_sshd_config" severity="medium">
+    <title>Verify Permissions on SSH Server config file</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">2.2.4</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+chmod 0600 '/etc/ssh/sshd_config'
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_file_groupowner_etc_shadow" severity="medium">
+    <title>Verify Group Who Owns /etc/shadow File</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">8.3.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+chgrp shadow '/etc/shadow'
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_kernel_module_usb_storage_disabled" severity="medium">
+    <title>Disable Mounting of usb-storage</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">9.4.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+printf '%s\n' "install usb-storage /bin/true" >> /etc/modprobe.d/usb-storage.conf
+printf '%s\n' "blacklist usb-storage" >> /etc/modprobe.d/usb-storage.conf
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_sshd_disable_root_login" severity="medium">
+    <title>Disable SSH Root Login</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">2.2.4</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+PermitRootLogin no
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_mount_option_tmp_nodev" severity="medium">
+    <title>Add nodev Option to /tmp</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">2.2.4</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+# complex fstab manipulation — intentionally not natively mapped
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_accounts_tmout" severity="medium">
+    <title>Set Interactive Session Timeout</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">8.6.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+# profile.d edit — not yet mapped
+    </fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_accounts_maximum_age_login_defs" severity="medium">
+    <title>Set Password Maximum Age</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">8.3.9</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+if [ -e "/etc/login.defs" ] ; then
+    LC_ALL=C sed -i "/^\s*PASS_MAX_DAYS\s/Id" "/etc/login.defs"
+else
+    touch "/etc/login.defs"
+fi
+printf '%s\n' "PASS_MAX_DAYS 90" >> "/etc/login.defs"
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_chmod" severity="medium">
+    <title>Record Events that Modify DAC via chmod</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">10.2.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+for ARCH in "${RULE_ARCHS[@]}"
+do
+    ACTION_ARCH_FILTERS="-a always,exit -F arch=$ARCH"
+    OTHER_FILTERS="-F perm=x"
+    AUID_FILTERS="-F auid>=1000 -F auid!=unset"
+    SYSCALL="chmod fchmod fchmodat"
+    KEY="perm_mod"
+done
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_audit_rules_login_events_lastlog" severity="medium">
+    <title>Record Attempts to Alter Logon and Logout Events - lastlog</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">10.2.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+printf '%s\n' "-w /var/log/lastlog -p wa -k logins" >> "/etc/audit/rules.d/audit.rules"
+    </fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_sshd_set_idle_timeout" severity="medium">
+    <title>Set SSH Client Alive Interval</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">8.6.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+printf '%s\n' "ClientAliveInterval 300" >> "/etc/ssh/sshd_config"
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_sshd_rekey_limit" severity="low">
+    <title>Set SSH RekeyLimit</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">2.2.4</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+printf '%s\n' "RekeyLimit 512M 1h" >> "/etc/ssh/sshd_config"
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_selinux_state" severity="high">
+    <title>Ensure SELinux State is Enforcing</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">7.2.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+sed -i "s/^SELINUX=.*/SELINUX=enforcing/" /etc/selinux/config
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_selinux_policytype" severity="medium">
+    <title>Configure SELinux Policy</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">7.2.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+sed -i "s/^SELINUXTYPE=.*/SELINUXTYPE=targeted/" /etc/selinux/config
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_grub2_enable_selinux" severity="medium">
+    <title>Ensure SELinux Not Disabled in the kernel arguments</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">7.2.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+sed -i 's/security=selinux//' /etc/default/grub
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_package_libselinux_installed" severity="medium">
+    <title>Install libselinux Package</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">7.2.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+if ! rpm -q --quiet "libselinux" ; then zypper install -y "libselinux" ; fi
+    </fix>
+  </Rule>
+
+  <Rule id="xccdf_org.ssgproject.content_rule_audit_rules_mac_modification_etc_selinux" severity="medium">
+    <title>Record Events that Modify the SELinux MAC Configuration</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">10.2.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+printf '%s\n' "-w /etc/selinux/ -p wa -k MAC-policy" >> "/etc/audit/rules.d/audit.rules"
+    </fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_dconf_gnome_screensaver_idle_delay" severity="medium">
+    <title>Set GNOME3 Screensaver Inactivity Timeout</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">8.6.1</reference>
+    <fix system="urn:xccdf:fix:script:sh">
+DCONFFILE="/etc/dconf/db/local.d/00-security-settings"
+DBDIR="/etc/dconf/db/local.d"
+mkdir -p "${DBDIR}"
+[ ! -z "${DCONFFILE}" ] &amp;&amp; echo "" >> "${DCONFFILE}"
+if ! grep -q "\[org/gnome/desktop/session\]" "${DCONFFILE}"
+then
+    printf '%s\n' "[org/gnome/desktop/session]" >> ${DCONFFILE}
+fi
+escaped_value="$(sed -e 's/\\/\\\\/g' &lt;&lt;&lt; "uint32 900")"
+if grep -q "^\s*idle-delay\s*=" "${DCONFFILE}"
+then
+    sed -i "s/\s*idle-delay\s*=\s*.*/idle-delay=${escaped_value}/g" "${DCONFFILE}"
+else
+    sed -i "\|\[org/gnome/desktop/session\]|a\idle-delay=${escaped_value}" "${DCONFFILE}"
+fi
+dconf update
+echo "/org/gnome/desktop/session/idle-delay" >> "/etc/dconf/db/local.d/locks/00-security-settings-lockdown"
+    </fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_package_aide_installed" severity="medium">
+    <title>Install AIDE</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">11.5.2</reference>
+    <fix system="urn:xccdf:fix:script:sh">if ! rpm -q --quiet "aide" ; then zypper install -y "aide" ; fi</fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_aide_build_database" severity="medium">
+    <title>Build and Test AIDE Database</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">11.5.2</reference>
+    <fix system="urn:xccdf:fix:script:sh">aide --init ; mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db</fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_aide_periodic_checking_systemd_timer" severity="medium">
+    <title>Configure Periodic Execution of AIDE via systemd timer</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">11.5.2</reference>
+    <fix system="urn:xccdf:fix:script:sh"># installs aidecheck.service + aidecheck.timer and enables the timer</fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_ensure_gpgcheck_globally_activated" severity="high">
+    <title>Ensure gpgcheck Enabled In Main zypp Configuration</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">6.3.3</reference>
+    <fix system="urn:xccdf:fix:script:sh"># set gpgcheck=1 in /etc/zypp/zypp.conf</fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_ensure_gpgcheck_never_disabled" severity="high">
+    <title>Ensure gpgcheck Never Disabled For Any Repository</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">6.3.3</reference>
+    <fix system="urn:xccdf:fix:script:sh"># sed repos.d gpgcheck=0 -> 1</fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_ensure_suse_gpgkey_installed" severity="high">
+    <title>Ensure SUSE GPG Key Installed</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">6.3.3</reference>
+    <fix system="urn:xccdf:fix:script:sh"># rpm --import SUSE keys</fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_rpm_verify_permissions" severity="high">
+    <title>Verify and Correct File Permissions with RPM</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">11.5.2</reference>
+    <fix system="urn:xccdf:fix:script:sh"># rpm --setperms</fix>
+  </Rule>
+  <Rule id="xccdf_org.ssgproject.content_rule_rpm_verify_hashes" severity="high">
+    <title>Verify File Hashes with RPM</title>
+    <reference href="https://docs-prv.pcisecuritystandards.org/PCI-DSS-v4_0.pdf">11.5.2</reference>
+    <fix system="urn:xccdf:fix:script:sh"># detective only - no safe automatic remediation</fix>
+  </Rule>
+
+</Benchmark>

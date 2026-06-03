@@ -1,0 +1,35 @@
+# PCI-DSS Salt states (generated)
+
+Source datastream: `ssg-sle15-ds.xml`
+Profile: `xccdf_org.ssgproject.content_profile_pci-dss-4`
+MAC framework: `apparmor`
+Generated: 2026-06-03T02:39:17+00:00
+
+Coverage: **196/256** applicable rules mapped to native Salt (77%).
+60 unmapped (`UNMAPPED.md`); 6 not applicable to this MAC (`SKIPPED_NA.md`, equivalence in `MAC_EQUIVALENCE.md`).
+
+## Layout
+- `init.sls` — includes every category below
+- categories: sysctl, packages, services, permissions, kernel_modules, sshd, lineinfile, pam, sudo, audit, dconf, coredump, grub, aide, rpm, mac
+- `_verify/oscap_scan.sh` — read-only oscap report
+- `_verify/salt_verify.sh` — `state.apply test=True` drift check
+- `_verify/oscap_remediate.sh` — independent oscap remediation (cross-check)
+
+## Deploy on Multi-Linux Manager
+1. Copy `srv/salt/pci_dss/` and `srv/salt/top.sls` into the Salt state tree
+   (the MLM/Uyuni server's `/srv/salt`), and the pillar files into `/srv/pillar`.
+2. Tag in-scope clients: `salt '<minion>' grains.setval pci_scope true`.
+3. Dry run:   `_verify/salt_verify.sh`
+4. Apply:     `salt -C 'G@pci_scope:true' state.apply pci_dss`
+5. Verify:    `_verify/oscap_scan.sh` and review `report.html`.
+
+Toggle whole categories via pillar `pci_dss:{category}: False`.
+
+## Use as an MLM 'formula with form' (Web UI toggles)
+1. Copy `srv/salt/pci_dss/` to `/srv/salt/pci_dss/` and
+   `srv/formula_metadata/pci_dss/` to `/srv/formula_metadata/pci_dss/` on the
+   MLM/Uyuni server.
+2. In the Web UI the formula **PCI-DSS v4 Hardening** appears under a system's or
+   group's *Formulas* tab. Tick it, then use the generated *PCI-DSS v4 Hardening*
+   sub-tab to toggle categories (these write the `pci_dss:` pillar consumed by the
+   states). Save, then apply the highstate.
