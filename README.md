@@ -73,6 +73,8 @@ Every state file is wrapped in a Jinja guard so any category can be disabled by 
 | `--cache` | `./.cache` | Download cache directory |
 | `--mac` | _(inferred)_ | Override MAC framework (`selinux` or `apparmor`) |
 | `--report-only` | — | Classify rules and write a coverage report only — no state files |
+| `--package` | — | Also build an MLM Salt formula **RPM** under `out/package/` |
+| `--pkg-version` | `1.0.0` | Version string for the formula RPM |
 
 **Quick start:**
 
@@ -149,18 +151,40 @@ Values for `sysctl`, `sshd`, `kmod`, and `lineinfile` states are extracted direc
 
 ## Deploying on SUSE Multi-Linux Manager
 
+The recommended path is the **formula RPM** — the way SUSE ships its own formulas. It's a single `zypper install` on the MLM/Uyuni server and the formula appears in the Web UI automatically.
+
+### Recommended: formula RPM
+
+```bash
+# Build the tree and the RPM in one go
+./scap2salt.py --package          # -> out/package/pci-dss-hardening-formula-<ver>.noarch.rpm
+```
+
+`out/package/` then contains the `.rpm`, plus the `.spec`, a source tarball, a `build.sh` (to rebuild where `rpmbuild` isn't present), and a `README.md`. On the MLM server:
+
+```bash
+sudo zypper install ./pci-dss-hardening-formula-<ver>.noarch.rpm
+```
+
+The files install to `/usr/share/salt-formulas/{metadata,states}/pci_dss/` — both already on the MLM server's Salt file roots, so no extra configuration is needed. Then, in the Web UI:
+
+1. Go to a **system** or **system group** → **Formulas**, tick **PCI-DSS v4 Hardening**, Save.
+2. Open the new **Pci Dss** sub-tab, toggle categories as desired, Save (this writes the `pci_dss:` pillar the states read).
+3. Apply the highstate. Use `_verify/oscap_scan.sh` for an independent read-only oscap check.
+
+In the formula model MLM generates the highstate and feeds the pillar from the form, so the RPM ships only the **states + metadata** (no `top.sls`/pillar).
+
+### Alternative: manual state tree (no RPM)
+
+For the classic "apply against a grain" model:
+
 1. Copy `out/srv/salt/pci_dss/` and `out/srv/salt/top.sls` to `/srv/salt/` on the MLM server, and `out/srv/pillar/` contents to `/srv/pillar/`.
 2. Tag in-scope clients: `salt '<minion>' grains.setval pci_scope true`
 3. Dry run: `out/srv/salt/pci_dss/_verify/salt_verify.sh`
 4. Apply: `salt -C 'G@pci_scope:true' state.apply pci_dss`
 5. Verify: `_verify/oscap_scan.sh` — produces an HTML report at `/var/log/pci_dss-scan/report.html`
 
-### Using the MLM Formulas tab (Web UI)
-
-1. Copy `out/srv/formula_metadata/pci_dss/` to `/srv/formula_metadata/pci_dss/` on the MLM server.
-2. The formula **PCI-DSS v4 Hardening** appears under a system's or group's *Formulas* tab.
-3. Tick it and use the generated sub-tab to toggle individual categories. Saving writes the `pci_dss:` pillar consumed by the states.
-4. Apply the highstate.
+The formula metadata is also written to `out/srv/formula_metadata/pci_dss/` for manual placement under `/srv/formula_metadata/` if you prefer not to use the RPM.
 
 ## Notes on targets and profiles
 

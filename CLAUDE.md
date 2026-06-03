@@ -134,6 +134,27 @@ Beyond the standard `-w`/`-a` reconstruction, `m_audit` handles three extras:
 - **`audit_rules_enable_syscall_auditing`** → a guarded operational `cmd.run` that comments out any `-a task,never` line in existing fragments (it edits existing files rather than adding one).
 - **`echo "-w … -k …" >>` watches and `OTHER_FILTERS`-only rules** (no `-S` syscall, e.g. `-F dir=… -F perm=…`) are now emitted; `$var` watch paths are expanded with `shell_resolve()`. The family guard also admits rules outside the `audit_*` id space that are built from the `rules.d` macro (e.g. `directory_access_var_log_audit`).
 
+### MLM formula RPM (`emit_package`, `--package`)
+
+`emit_package()` repackages the already-generated tree into the canonical SUSE
+formula layout and builds an RPM:
+
+- States → `/usr/share/salt-formulas/states/pci_dss/`, metadata (`form.yml`,
+  `metadata.yml`) → `/usr/share/salt-formulas/metadata/pci_dss/`. Both are on the
+  MLM/Uyuni server's Salt file roots, so the formula appears in the Formulas tab
+  with no extra config.
+- The **formula model** deliberately omits `top.sls` and the pillar tree — MLM
+  generates the highstate and feeds the `pci_dss:` pillar from the form. The
+  category guards (`pillar.get('pci_dss', …)`) already match what the form writes.
+- `out/package/` holds the `.spec`, a `%{name}-%{version}.tar.gz` source tarball,
+  `build.sh` (rebuild where `rpmbuild` is absent), a deploy `README.md`, and the
+  built `.rpm`. `_build_rpm()` shells out to `rpmbuild` in a private `_topdir`; if
+  `rpmbuild` is missing or fails it leaves the spec+tarball and prints how to
+  finish the build. Package name is `pci-dss-hardening-formula`; the formula dir
+  (and pillar namespace) stays `pci_dss`.
+- `out/package/` lives under the git-ignored `out/`; distribute the `.rpm` via a
+  GitHub Release or an MLM software channel, not by committing it.
+
 ### "No remediation shipped" classification
 
 `RuleInfo.has_fix` is `True` if the rule carries any `<fix>` element (shell *or* Ansible). In `main()`, an unmapped rule with `has_fix == False` goes to the `noremed` bucket instead of `unmapped`: the SSG ships nothing to automate (detective-only rules like uniqueness checks, BIOS settings, firewall design). These are written to `NO_REMEDIATION.md` and **excluded from the coverage denominator** — so the headline percentage reflects *remediable* rules, not rules we merely haven't written a handler for. `UNMAPPED.md` now means strictly "has a fix we don't yet parse."
@@ -177,6 +198,7 @@ The rationale is documented per rule in `MAC_EQUIVALENCE.md` (written alongside 
 | `emit_readme()` | `README.md` inside the generated state dir (deploy instructions) |
 | `emit_verify()` | Three shell scripts in `_verify/` |
 | `emit_formula()` | `form.yml` + `metadata.yml` for MLM Formulas tab |
+| `emit_package()` | MLM Salt **formula RPM** under `out/package/` (spec + tarball + `build.sh` + README, and the built `.rpm` if `rpmbuild` is present); gated by `--package` |
 | `emit_report()` | Standalone `coverage-report.md` (headline %, per-category mapped table, guarded operational list, unmapped rules grouped by family, N/A list); used by `--report-only` |
 
 ### Pillar guard pattern
