@@ -564,20 +564,55 @@ def m_mount(r):
 def m_audit(r):
     """Audit rules: reconstruct watch (-w) and syscall (-a) lines into a
     per-rule fragment under /etc/audit/rules.d/ (augenrules concatenates them)."""
-    if not (r.short.startswith("audit_rules_") or r.short.startswith("audit_")):
-        return None
     bash = r.bash or ""
+    # Accept the audit_* family, plus any rule built from the audit rules.d macro
+    # (e.g. directory_access_var_log_audit, whose id is in the directory_* family).
+    if not (r.short.startswith(("audit_rules_", "audit_"))
+            or "rules.d" in bash and ("OTHER_FILTERS=" in bash or "SYSCALL=" in bash)):
+        return None
+
+    # Special case: make the auditd config immutable. '-e 2' must be the LAST
+    # rule augenrules loads, so name the fragment to sort after the others.
+    if r.short == "audit_rules_immutable":
+        st = SaltState(
+            "audit_frag_immutable", "file.managed",
+            [("name", "/etc/audit/rules.d/zz-pci-immutable.rules"),
+             ("mode", "0640"),
+             ("contents", ["# Set the audit configuration immutable (scap2salt)",
+                           "-e 2"])],
+            "audit", r,
+        )
+        st.audit_fragment = True
+        return st
+
+    # Special case: enable syscall auditing by disabling the '-a task,never' rule.
+    # This edits existing fragments, so it is an idempotent operational state.
+    if r.short == "audit_rules_enable_syscall_auditing":
+        st = SaltState(
+            "audit_enable_syscall", "cmd.run",
+            [("name", "sed -ri 's/^([[:space:]]*-a[[:space:]]+task,never)/#\\1/' "
+                      "/etc/audit/rules.d/*.rules"),
+             ("onlyif", "grep -rqE '^[[:space:]]*-a[[:space:]]+task,never' "
+                        "/etc/audit/rules.d/")],
+            "audit", r,
+        )
+        st.operational = True
+        return st
+
     lines = []
     # 1) literal -w/-a rules written via the standard printf idiom (clean)
     for lit in re.findall(r"""printf\s+'%s\\n'\s+"([^"]+)" """.strip(), bash):
         if lit.startswith(("-w ", "-a ")):
             lines.append(lit.strip())
-    # 1b) any remaining bare watch rules (strip stray trailing quote)
+    # 1b) -w/-a rules written via 'echo "..." >>' (resolve any $var in the path/key)
+    for lit in re.findall(r'echo\s+"(-[wa]\s[^"]+)"\s*>>', bash):
+        lines.append(shell_resolve(lit, bash).strip())
+    # 1c) any remaining bare watch rules (strip stray trailing quote)
     for w in re.findall(r"(-w\s+/\S+\s+-p\s+\S+(?:\s+-k\s+[^\s\"']+)?)", bash):
         w = w.strip().rstrip('"\'')
         if w not in lines:
             lines.append(w)
-    # 2) syscall rules reconstructed from the literal variable assignments
+    # 2) syscall / file-filter rules reconstructed from the literal assignments
     def grab(name):
         mm = re.search(rf'{name}="([^"]*)"', bash)
         return mm.group(1).strip() if mm else ""
@@ -585,7 +620,8 @@ def m_audit(r):
     key = grab("KEY")
     auid = grab("AUID_FILTERS")
     other = grab("OTHER_FILTERS")
-    if syscall:
+    # Emit when there are syscalls OR a non-syscall filter (e.g. -F dir=... watch).
+    if syscall or other:
         for arch in ("b32", "b64"):
             parts = [f"-a always,exit -F arch={arch}"]
             if other:
@@ -929,6 +965,69 @@ def m_chrony(r):
     )
 
 
+@mapper
+def m_chronyd_user(r):
+    """Run chronyd under the chrony user via /etc/sysconfig/chronyd OPTIONS."""
+    if r.short != "chronyd_run_as_chrony_user":
+        return None
+    return SaltState(
+        "chronyd_run_as_chrony", "file.replace",
+        [("name", "/etc/sysconfig/chronyd"),
+         ("pattern", "^OPTIONS=.*$"),
+         ("repl", 'OPTIONS="-u chrony"'),
+         ("append_if_not_found", True),
+         ("create_if_not_found", True)],
+        "lineinfile", r,
+    )
+
+
+@mapper
+def m_libuser_hash(r):
+    """Password hashing algorithm in /etc/libuser.conf [defaults] crypt_style."""
+    if r.short != "set_password_hashing_algorithm_libuserconf":
+        return None
+    vm = re.search(r"var_password_hashing_algorithm_pam='([^']*)'", r.bash or "")
+    alg = (vm.group(1).split("|")[0] if vm else "sha512")
+    # SUSE's stock libuser.conf ships a [defaults] section with crypt_style.
+    return SaltState(
+        "libuser_crypt_style", "file.replace",
+        [("name", "/etc/libuser.conf"),
+         ("pattern", "^\\s*crypt_style\\s*=.*$"),
+         ("repl", f"crypt_style = {alg}"),
+         ("append_if_not_found", False)],
+        "lineinfile", r,
+    )
+
+
+@mapper
+def m_timer(r):
+    """timer_<unit>_enabled -> enable the corresponding systemd .timer."""
+    m = re.match(r"^timer_(.+)_enabled$", r.short)
+    if not m:
+        return None
+    unit = m.group(1) + ".timer"
+    return SaltState(
+        f"timer_{m.group(1)}", "service.running",
+        [("name", unit), ("enable", True)],
+        "services", r,
+    )
+
+
+@mapper
+def m_limits(r):
+    """Disable user core dumps via a /etc/security/limits.d drop-in."""
+    if r.short != "disable_users_coredumps":
+        return None
+    return SaltState(
+        "limits_disable_coredumps", "file.managed",
+        [("name", "/etc/security/limits.d/10-pci-coredump.conf"),
+         ("mode", "0644"),
+         ("contents", ["# Disable core dumps for all users (scap2salt, PCI-DSS)",
+                       "* hard core 0"])],
+        "limits", r,
+    )
+
+
 def _iptables_state(sid, family, line, rule):
     """Translate one `ip[6]tables -A CHAIN ... -j TARGET` line into iptables.append."""
     cm = re.search(r"-A\s+(\w+)", line)
@@ -1046,8 +1145,8 @@ def map_rule(r):
 
 CATEGORIES = ["sysctl", "packages", "services", "permissions",
               "kernel_modules", "sshd", "lineinfile", "pam", "sudo",
-              "audit", "dconf", "coredump", "grub", "firewall", "aide",
-              "rpm", "mounts", "mac", "misc"]
+              "audit", "dconf", "coredump", "grub", "firewall", "limits",
+              "aide", "rpm", "mounts", "mac", "misc"]
 HEADER = "# Generated by scap2salt — DO NOT EDIT BY HAND.\n# Source: {src}\n# Profile: {prof}\n# Generated: {ts}\n\n"
 
 
@@ -1311,6 +1410,7 @@ CAT_LABELS = {
     "coredump": "systemd core dump policy",
     "grub": "GRUB kernel command-line arguments",
     "firewall": "Firewall (iptables loopback rules)",
+    "limits": "Resource limits (security/limits.d)",
     "aide": "File integrity (AIDE)",
     "rpm": "Package signatures & verification (RPM/GPG)",
     "mounts": "Filesystem mount options",

@@ -119,7 +119,7 @@ Each active rule is passed through an ordered list of **mappers**. The first map
 | `m_sshd` | `sshd_*` | `file.replace` on `/etc/ssh/sshd_config.d/00-pci-hardening.conf`; values extracted from the rule's bash fix or a curated fallback table |
 | `m_lineinfile` | rules that write a config line via `printf '%s\n' … >> /path` | `file.replace` with idempotent pattern + `append_if_not_found` |
 | `m_mount` | `mount_option_*_nodev/nosuid/noexec` | `mount.mounted` with `persist: True` |
-| `m_audit` | `audit_rules_*`, `audit_*` | `file.managed` writing per-rule fragments to `/etc/audit/rules.d/`; one `augenrules --load` triggered on any change |
+| `m_audit` | `audit_rules_*`, `audit_*`, plus rules built from the audit `rules.d` macro | `file.managed` writing per-rule fragments to `/etc/audit/rules.d/` (incl. `-e 2` immutable, `-F dir=` watches, `$var` watch paths); one `augenrules --load` triggered on any change |
 | `m_auditd_conf` | `auditd_*` | `file.replace` setting `key = value` in `/etc/audit/auditd.conf` (or the audisp syslog plugin); `service auditd restart` triggered on any change |
 | `m_pam` | PAM module-arg rules (cracklib pwquality, `pam_unix` hashing, `pam_wheel`) | guarded `cmd.run` that adds/updates one option on the `pam_*.so` line, preserving siblings (idempotent via `unless`) |
 | `m_sudoers` | `sudo_*` with a `Defaults …` fix | `file.managed` writing a `/etc/sudoers.d/99-pci-*` drop-in (mode `0440`) |
@@ -129,6 +129,10 @@ Each active rule is passed through an ordered list of **mappers**. The first map
 | `m_tmout` | `accounts_tmout` | `file.managed` writing `/etc/profile.d/autologout.sh` |
 | `m_chrony` | `chronyd_specify_remote_server` | `file.replace` ensuring a `pool`/`server` line in `/etc/chrony.conf` |
 | `m_iptables` | `set_loopback_traffic`, `set_ipv6_loopback_traffic` | `iptables.append` states (idempotent, `save: True`) for the loopback rules |
+| `m_chronyd_user` | `chronyd_run_as_chrony_user` | `file.replace` setting `OPTIONS="-u chrony"` in `/etc/sysconfig/chronyd` |
+| `m_libuser_hash` | `set_password_hashing_algorithm_libuserconf` | `file.replace` on `crypt_style` in `/etc/libuser.conf` |
+| `m_timer` | `timer_*_enabled` | `service.running` on the systemd `.timer` |
+| `m_limits` | `disable_users_coredumps` | `file.managed` writing a `/etc/security/limits.d/` drop-in |
 | `m_dconf` | `dconf_*` | `file.managed` writing a settings fragment + lock fragment to the dconf db dir; `dconf update` triggered on any change |
 | `m_aide` | `aide_build_database`, `aide_periodic_checking_systemd_timer` | guarded `cmd.run` (database init) and `file.managed` (systemd unit + timer) |
 | `m_rpm` | `ensure_gpgcheck_*`, `ensure_suse_gpgkey_*`, `rpm_verify_*` | `file.replace` on `/etc/zypp/zypp.conf`, guarded `cmd.run` for per-repo and per-package checks |

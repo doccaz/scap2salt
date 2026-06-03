@@ -95,7 +95,7 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_sshd` | `sshd_*` | `sshd` |
 | `m_lineinfile` | rules using `printf '%s\n' "<line>" >> "<path>"` | `lineinfile` |
 | `m_mount` | `mount_option_*_nodev/nosuid/noexec` | `mounts` |
-| `m_audit` | `audit_rules_*`, `audit_*` | `audit` |
+| `m_audit` | `audit_rules_*`, `audit_*`, + rules using the `rules.d` macro (e.g. `directory_access_var_log_audit`) | `audit` |
 | `m_auditd_conf` | `auditd_*` (auditd.conf / audisp plugin `key = value`) | `audit` |
 | `m_pam` | PAM module-arg rules using CaC's `VALUES/VALUE_NAMES/ARGS` macro (cracklib pwquality, `pam_unix` hashing, `pam_wheel`) | `pam` |
 | `m_sudoers` | `sudo_*` with an `echo "Defaults …" >>` fix | `sudo` |
@@ -105,6 +105,10 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_tmout` | `accounts_tmout` (`/etc/profile.d/autologout.sh`) | `lineinfile` |
 | `m_chrony` | `chronyd_specify_remote_server` (`/etc/chrony.conf`) | `lineinfile` |
 | `m_iptables` | `set_loopback_traffic`, `set_ipv6_loopback_traffic` | `firewall` |
+| `m_chronyd_user` | `chronyd_run_as_chrony_user` (`/etc/sysconfig/chronyd`) | `lineinfile` |
+| `m_libuser_hash` | `set_password_hashing_algorithm_libuserconf` (`/etc/libuser.conf`) | `lineinfile` |
+| `m_timer` | `timer_*_enabled` (systemd `.timer`) | `services` |
+| `m_limits` | `disable_users_coredumps` (`/etc/security/limits.d/`) | `limits` |
 | `m_dconf` | `dconf_*` | `dconf` |
 | `m_aide` | `aide_build_database`, `aide_periodic_checking_systemd_timer` | `aide` |
 | `m_rpm` | `ensure_gpgcheck_*`, `ensure_suse_gpgkey_*`, `rpm_verify_*` | `rpm` |
@@ -122,6 +126,13 @@ Several handlers (`m_auditd_conf`, `m_sudoers`, `m_grub_audit`, `m_pam`) read a 
 ### Firewall handler (`m_iptables`) — one rule, several states
 
 `m_iptables` handles only the two loopback-traffic rules (`set_loopback_traffic` IPv4, `set_ipv6_loopback_traffic` IPv6). Each ships three `ip[6]tables -A CHAIN … -j TARGET` lines; the handler translates each into an `iptables.append` state (`-i`→`in-interface`, `-o`→`out-interface`, `-s`→`source`, `-j`→`jump`, with `family` and `save: True`). Because `map_rule()` returns a single `SaltState`, the first line becomes the main state and the rest are attached as `extra_states`. **Caveat:** SLE 15 defaults to firewalld/nftables; these raw iptables rules are faithful to the SCAP check but may need firewalld-coexistence review — a note to that effect is emitted at the top of `firewall.sls`. The other four firewall rules in the PCI baseline (`set_firewalld_default_zone`, `set_ip6tables_default_rule`, `nftables_ensure_default_deny_policy`, `ensure_firewall_rules_for_open_ports`) ship **no fix** and land in `NO_REMEDIATION.md`.
+
+### Audit special cases (`m_audit`)
+
+Beyond the standard `-w`/`-a` reconstruction, `m_audit` handles three extras:
+- **`audit_rules_immutable`** → a fragment named `zz-pci-immutable.rules` containing `-e 2`. The `zz-` prefix makes augenrules concatenate it **last**, as the immutable directive must be the final rule.
+- **`audit_rules_enable_syscall_auditing`** → a guarded operational `cmd.run` that comments out any `-a task,never` line in existing fragments (it edits existing files rather than adding one).
+- **`echo "-w … -k …" >>` watches and `OTHER_FILTERS`-only rules** (no `-S` syscall, e.g. `-F dir=… -F perm=…`) are now emitted; `$var` watch paths are expanded with `shell_resolve()`. The family guard also admits rules outside the `audit_*` id space that are built from the `rules.d` macro (e.g. `directory_access_var_log_audit`).
 
 ### "No remediation shipped" classification
 

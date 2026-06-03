@@ -3,14 +3,14 @@
 Source datastream: `ssg-sle15-ds.xml`
 Profile: `xccdf_org.ssgproject.content_profile_pci-dss-4`
 MAC framework: `apparmor`
-Generated: 2026-06-03T02:52:23+00:00
+Generated: 2026-06-03T03:00:01+00:00
 
-Coverage: **198/238** remediable rules mapped to native Salt (83%).
-40 unmapped (`UNMAPPED.md`); 18 ship no remediation (`NO_REMEDIATION.md`); 6 not applicable to this MAC (`SKIPPED_NA.md`, equivalence in `MAC_EQUIVALENCE.md`).
+Coverage: **206/238** remediable rules mapped to native Salt (87%).
+32 unmapped (`UNMAPPED.md`); 18 ship no remediation (`NO_REMEDIATION.md`); 6 not applicable to this MAC (`SKIPPED_NA.md`, equivalence in `MAC_EQUIVALENCE.md`).
 
 ## Layout
 - `init.sls` — includes every category below
-- categories: sysctl, packages, services, permissions, kernel_modules, sshd, lineinfile, pam, sudo, audit, dconf, coredump, grub, firewall, aide, rpm, mac
+- categories: sysctl, packages, services, permissions, kernel_modules, sshd, lineinfile, pam, sudo, audit, dconf, coredump, grub, firewall, limits, aide, rpm, mac
 - `_verify/oscap_scan.sh` — read-only oscap report
 - `_verify/salt_verify.sh` — `state.apply test=True` drift check
 - `_verify/oscap_remediate.sh` — independent oscap remediation (cross-check)

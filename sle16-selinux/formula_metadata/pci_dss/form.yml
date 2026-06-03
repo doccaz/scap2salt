@@ -63,6 +63,10 @@ pci_dss:
     $type: boolean
     $default: True
     $name: "Firewall (iptables loopback rules)"
+  limits:
+    $type: boolean
+    $default: True
+    $name: "Resource limits (security/limits.d)"
   aide:
     $type: boolean
     $default: True

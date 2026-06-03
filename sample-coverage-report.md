@@ -3,11 +3,11 @@
 - Datastream: `ssg-sle15-ds.xml`
 - Profile: `xccdf_org.ssgproject.content_profile_pci-dss-4`
 - MAC framework: `apparmor`
-- Generated: 2026-06-03T02:50:03+00:00
+- Generated: 2026-06-03T02:58:50+00:00
 
 **Selected:** 262  |  **Remediable:** 238  |  **No remediation:** 18  |  **N/A (apparmor):** 6
 
-**Native coverage: 198/238 remediable (83%)** — of which 12 guarded operational state(s).
+**Native coverage: 206/238 remediable (86%)** — of which 13 guarded operational state(s).
 
 _Denominator excludes N/A rules and rules the SSG ships no remediation for._
 
@@ -17,26 +17,28 @@ _Denominator excludes N/A rules and rules the SSG ships no remediation for._
 |---|---|
 | Kernel parameters (sysctl) | 12 |
 | Package install / removal | 22 |
-| Service enable / disable | 7 |
+| Service enable / disable | 8 |
 | File permissions & ownership | 53 |
 | Disabled kernel modules | 3 |
 | SSH server hardening | 17 |
-| Config-file settings (login.defs, securetty, etc.) | 11 |
+| Config-file settings (login.defs, securetty, etc.) | 13 |
 | PAM module arguments (pwquality, pam_unix, pam_wheel) | 6 |
 | sudo Defaults (sudoers.d drop-ins) | 3 |
-| Audit (auditd rules + auditd.conf) | 45 |
+| Audit (auditd rules + auditd.conf) | 49 |
 | GNOME desktop (dconf) policy | 7 |
 | systemd core dump policy | 2 |
 | GRUB kernel command-line arguments | 2 |
 | Firewall (iptables loopback rules) | 2 |
+| Resource limits (security/limits.d) | 1 |
 | File integrity (AIDE) | 2 |
 | Package signatures & verification (RPM/GPG) | 4 |
 
-## Guarded operational states (12)
+## Guarded operational states (13)
 _Imperative remediations (no declarative Salt primitive); idempotent via creates/onlyif/unless._
 
 - `aide_build_database` (Req-11.5, 11.5.2)
 - `aide_periodic_checking_systemd_timer` (Req-11.5, 11.5.2)
+- `audit_rules_enable_syscall_auditing` (CM-6(b), CM-6.1(iv), SRG-OS-000480-GPOS-00227, SLES-15-030820, SLES-15-750450450, SV-234981r991589_rule)
 - `cracklib_accounts_password_pam_dcredit` (Req-8.2.3, 8.3.6, 8.3)
 - `cracklib_accounts_password_pam_lcredit` (Req-8.2.3, 8.3.6, 8.3)
 - `cracklib_accounts_password_pam_minlen` (Req-8.2.3, 8.3.6, 8.3)
@@ -48,7 +50,7 @@ _Imperative remediations (no declarative Salt primitive); idempotent via creates
 - `set_password_hashing_algorithm_commonauth` (Req-8.2.1, 8.3.2, 8.3)
 - `use_pam_wheel_group_for_su` (2.2.6, 2.2)
 
-## Unmapped (40)
+## Unmapped (32)
 _No native handler — add a mapper or handle via a reviewed state._
 
 ### accounts_* (6)
@@ -58,14 +60,6 @@ _No native handler — add a mapper or handle via a reviewed state._
 - `accounts_passwords_pam_tally2` — Set Deny For Failed Password Attempts (PCI Req-8.1.6, 8.3.4, 8.3; sev medium)
 - `accounts_passwords_pam_tally2_unlock_time` — Set Lockout Time for Failed Password Attempts using pam_tally2 (PCI Req-8.1.7, 8.3.4, 8.3; sev medium)
 - `accounts_set_post_pw_existing` — Set existing passwords a period of inactivity before they been locked (PCI Req-8.1.4, 8.2.6, 8.2; sev medium)
-
-### audit_* (3)
-- `audit_rules_enable_syscall_auditing` — Remove Default Configuration to Disable Syscall Auditing (PCI CM-6(b), CM-6.1(iv), SRG-OS-000480-GPOS-00227, SLES-15-030820, SLES-15-750450450, SV-234981r991589_rule; sev medium)
-- `audit_rules_immutable` — Make the auditd Configuration Immutable (PCI Req-10.5.2, 10.3.2, 10.3; sev medium)
-- `audit_rules_login_events_faillock` — Record Attempts to Alter Logon and Logout Events - faillock (PCI Req-10.2.3, 10.2.1.3, 10.2.1, 10.2; sev medium)
-
-### chronyd_* (1)
-- `chronyd_run_as_chrony_user` — Ensure that chronyd is running under chrony user account (PCI 10.6.3, 10.6; sev medium)
 
 ### configure_* (2)
 - `configure_crypto_policy` — Configure System Cryptography Policy (PCI 2.2.7, 2.2; sev high)
@@ -77,12 +71,6 @@ _No native handler — add a mapper or handle via a reviewed state._
 
 ### dir_* (1)
 - `dir_perms_world_writable_sticky_bits` — Verify that All World-Writable Directories Have Sticky Bits Set (PCI 2.2.6, 2.2; sev medium)
-
-### directory_* (1)
-- `directory_access_var_log_audit` — Record Access Events to Audit Log Directory (PCI 10.3.1, 10.3; sev medium)
-
-### disable_* (1)
-- `disable_users_coredumps` — Disable Core Dumps for All Users (PCI 3.3.1.1, 3.3.1, 3.3; sev medium)
 
 ### display_* (1)
 - `display_login_attempts` — Ensure PAM Displays Last Logon/Access Notification (PCI Req-10.2.4, 10.2.1.4, 10.2.1, 10.2; sev low)
@@ -124,15 +112,11 @@ _No native handler — add a mapper or handle via a reviewed state._
 ### security_* (1)
 - `security_patches_up_to_date` — Ensure Software Patches Installed (PCI Req-6.2, 6.3.3, 6.3; sev medium)
 
-### set_* (2)
-- `set_password_hashing_algorithm_libuserconf` — Set Password Hashing Algorithm in /etc/libuser.conf (PCI Req-8.2.1, 8.3.2, 8.3; sev medium)
+### set_* (1)
 - `set_password_hashing_algorithm_systemauth` — Set PAM Password Hashing Algorithm - system-auth (PCI Req-8.2.1, 8.3.2, 8.3; sev medium)
 
 ### sudo_* (1)
 - `sudo_require_authentication` — Ensure Users Re-Authenticate for Privilege Escalation - sudo (PCI 2.2.6, 2.2; sev medium)
-
-### timer_* (1)
-- `timer_logrotate_enabled` — Enable logrotate Timer (PCI Req-10.7, 10.5.1, 10.5; sev medium)
 
 ### wireless_* (1)
 - `wireless_disable_interfaces` — Deactivate Wireless Network Interfaces (PCI Req-1.3.3, 1.3.3, 1.3; sev medium)
