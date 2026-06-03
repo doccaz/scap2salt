@@ -17,18 +17,19 @@ Default use case: generate PCI-DSS v4 enforcement states for SLE 15 with AppArmo
 
 ## Current coverage snapshot
 
-Latest full run — `ssg-sle15-ds.xml`, profile `pci-dss-4` (PCI-DSS v4.0.1), AppArmor:
+Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstream datastreams:
 
-| Metric | Count |
-|---|---|
-| Rules selected by profile | 262 |
-| Remediable (coverage denominator) | 238 |
-| No remediation shipped (detective-only) | 18 |
-| N/A for AppArmor (MAC equivalence) | 6 |
+| Metric | SLE 15 (AppArmor) | SLE 16 (SELinux) |
+|---|---|---|
+| Rules selected by profile | 262 | 247 |
+| Remediable (coverage denominator) | 238 | 230 |
+| No remediation shipped (detective-only) | 18 | 16 |
+| N/A for this MAC framework | 6 | 1 |
+| **Native coverage** | **206/238 — 86%** | **198/230 — 86%** |
+| Guarded operational states | 13 | 8 |
+| Remediable rules still unmapped | 32 | 32 |
 
-**Native coverage: 206/238 remediable (86%)** — 13 guarded operational states, 32 remediable rules still unmapped.
-
-Regenerate with `./scap2salt.py --report-only` (writes `out/coverage-report.md`). Keep these numbers in sync with the README's "Current coverage" section when handlers change.
+Regenerate with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`. Keep these numbers in sync with the README's "Current coverage" section when handlers change.
 
 ---
 

@@ -60,40 +60,42 @@ Every state file is wrapped in a Jinja guard so any category can be disabled by 
 
 ## Current coverage
 
-Latest run against the full `ssg-sle15-ds.xml` datastream, profile `pci-dss-4` (PCI-DSS v4.0.1), MAC framework AppArmor:
+Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstream datastreams:
 
-| Metric | Count |
-|---|---|
-| Rules selected by profile | 262 |
-| **Remediable** (coverage denominator) | **238** |
-| No remediation shipped (detective-only) | 18 |
-| N/A for AppArmor (covered by MAC equivalence) | 6 |
-
-**Native coverage: 206 / 238 remediable rules — 86%** (of which 13 guarded operational states; 32 remediable rules remain unmapped).
+| Metric | SLE 15 (AppArmor) | SLE 16 (SELinux) |
+|---|---|---|
+| Rules selected by profile | 262 | 247 |
+| **Remediable** (coverage denominator) | **238** | **230** |
+| No remediation shipped (detective-only) | 18 | 16 |
+| N/A for this MAC framework | 6 | 1 |
+| **Native coverage** | **206 / 238 — 86%** | **198 / 230 — 86%** |
+| Guarded operational states | 13 | 8 |
+| Remediable rules still unmapped | 32 | 32 |
 
 Coverage by category:
 
-| Category | Rules |
-|---|---|
-| File permissions & ownership | 53 |
-| Audit (auditd rules + auditd.conf) | 49 |
-| Package install / removal | 22 |
-| SSH server hardening | 17 |
-| Config-file settings (login.defs, securetty, etc.) | 13 |
-| Kernel parameters (sysctl) | 12 |
-| Service enable / disable | 8 |
-| GNOME desktop (dconf) policy | 7 |
-| PAM module arguments (pwquality, pam_unix, pam_wheel) | 6 |
-| Package signatures & verification (RPM/GPG) | 4 |
-| Disabled kernel modules | 3 |
-| sudo Defaults (sudoers.d drop-ins) | 3 |
-| systemd core dump policy | 2 |
-| GRUB kernel command-line arguments | 2 |
-| Firewall (iptables loopback rules) | 2 |
-| File integrity (AIDE) | 2 |
-| Resource limits (security/limits.d) | 1 |
+| Category | SLE 15 | SLE 16 |
+|---|---|---|
+| File permissions & ownership | 53 | 53 |
+| Audit (auditd rules + auditd.conf) | 49 | 49 |
+| Package install / removal | 22 | 17 |
+| SSH server hardening | 17 | 15 |
+| Config-file settings (login.defs, securetty, etc.) | 13 | 16 |
+| Kernel parameters (sysctl) | 12 | 12 |
+| Service enable / disable | 8 | 8 |
+| GNOME desktop (dconf) policy | 7 | 7 |
+| PAM module arguments (pwquality, pam_unix, pam_wheel) | 6 | 2 |
+| Package signatures & verification (RPM/GPG) | 4 | 3 |
+| Disabled kernel modules | 3 | 3 |
+| sudo Defaults (sudoers.d drop-ins) | 3 | 3 |
+| Mandatory Access Control (SELinux / AppArmor) | — | 3 |
+| systemd core dump policy | 2 | 2 |
+| GRUB kernel command-line arguments | 2 | 2 |
+| Firewall (iptables loopback rules) | 2 | — |
+| File integrity (AIDE) | 2 | 2 |
+| Resource limits (security/limits.d) | 1 | 1 |
 
-Regenerate these numbers any time with `./scap2salt.py --report-only` (writes `out/coverage-report.md`).
+Regenerate these numbers any time with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`.
 
 ## Usage
 
