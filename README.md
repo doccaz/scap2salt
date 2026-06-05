@@ -97,6 +97,24 @@ Coverage by category:
 
 Regenerate these numbers any time with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`.
 
+## Deviations from upstream CaC
+
+scap2salt is intentionally faithful to ComplianceAsCode's fix scripts. The
+exceptions below are deliberate, because the upstream value fails its **own**
+OVAL check on the targeted platforms:
+
+| Rule(s) | CaC value | scap2salt value | Why |
+|---|---|---|---|
+| `sshd_set_keepalive` (and, by dependency, `sshd_set_idle_timeout`) | `ClientAliveCountMax 0` | `ClientAliveCountMax 1` | On **OpenSSH ≥ 8.2** (SLE 16 ships OpenSSH 10) a `ClientAliveCountMax` of `0` *disables* the idle timeout entirely, so both rules fail their checks. A value of `1` keeps the timeout functional (session drops after `ClientAliveInterval × 1`). The override lives in `SSHD_KEEPALIVE_OVERRIDE` in `scap2salt.py`. |
+
+> Not a deviation, but worth knowing: `sshd_disable_root_login` can still report
+> *fail* if the host carries a separate drop-in (e.g. `/etc/ssh/sshd_config.d/root.conf`)
+> with `PermitRootLogin yes`. scap2salt's `00-pci-hardening.conf` sorts first so
+> `no` is effective (`sshd -T` confirms), but the scanner flags the conflicting
+> line. Remove or fix the offending drop-in. Also note SLE 16 ships sshd's config
+> in `/usr/etc/ssh/sshd_config`; an empty `/etc/ssh/sshd_config` will shadow it
+> and disable **all** drop-ins.
+
 ## Usage
 
 ```bash

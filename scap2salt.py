@@ -511,6 +511,12 @@ SSHD_TABLE = {
 # sshd rules that are not a single config directive (skip — handled elsewhere / N/A).
 SSHD_SKIP = {"sshd_use_strong_rng", "sshd_install_libpam_ssh"}
 SSHD_DROPIN = "/etc/ssh/sshd_config.d/00-pci-hardening.conf"
+# Deliberate deviation from CaC (documented in README "Deviations from upstream
+# CaC"): CaC ships ClientAliveCountMax=0, but on OpenSSH >= 8.2 a value of 0
+# DISABLES the idle timeout entirely, so both sshd_set_keepalive and
+# sshd_set_idle_timeout fail their own checks on modern systems. Force a
+# functional non-zero value.
+SSHD_KEEPALIVE_OVERRIDE = "1"
 
 
 @mapper
@@ -545,6 +551,9 @@ def m_sshd(r):
             value = fo.split(None, 1)[1]
         else:
             return None  # unresolved value -> don't write a broken literal
+    # Override CaC's ClientAliveCountMax=0 (breaks the timeout on OpenSSH >= 8.2).
+    if directive == "ClientAliveCountMax" and value.strip() == "0":
+        value = SSHD_KEEPALIVE_OVERRIDE
     return SaltState(
         f"sshd_{directive}", "file.replace",
         [("name", SSHD_DROPIN),
