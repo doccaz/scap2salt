@@ -1278,8 +1278,14 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                 new_lines = [l for l in orig if l not in _seen]
                 _seen.update(orig)
                 if not new_lines:
-                    continue  # all lines already covered — omit this fragment
-                s.args[ci] = ("contents", new_lines)
+                    # All lines already covered by an earlier fragment.  Keep the
+                    # state so Salt overwrites the on-disk file (which may have
+                    # stale content from a previous run) with just a comment.
+                    s.args[ci] = ("contents", [
+                        f"# Duplicate rules omitted — covered by an earlier fragment."
+                    ])
+                else:
+                    s.args[ci] = ("contents", new_lines)
                 _deduped.append(s)
             states = _deduped
         if cat == "lineinfile":
@@ -1830,7 +1836,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.7", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.8", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -2040,7 +2046,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.7",
+    ap.add_argument("--pkg-version", default="1.0.8",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
