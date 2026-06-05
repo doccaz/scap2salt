@@ -339,6 +339,7 @@ def m_sysctl(r):
     if not m:
         return None
     key, val = m.group(1), m.group(2).strip().strip('"\'')
+    val = shell_resolve(val, r.bash or "").split("|")[0].strip()
     conf = "/etc/sysctl.d/" + key.replace(".", "_") + ".conf"
     return SaltState(
         f"sysctl_{key}", "sysctl.present",
@@ -364,6 +365,8 @@ def m_service(r):
     if not m:
         return None
     svc, action = m.group(1), m.group(2)
+    if svc == "chronyd_or_ntpd":
+        svc = "chronyd"
     if action == "enabled":
         return SaltState(f"svc_on_{svc}", "service.running",
                          [("name", svc), ("enable", True)], "services", r)
@@ -435,6 +438,14 @@ def m_file_perms(r):
 
     if not path:
         return None
+    # Detect directory paths: trailing slash from bash or known directory set.
+    _DIR_PATHS = frozenset({
+        "/etc/cron.d", "/etc/cron.daily", "/etc/cron.hourly",
+        "/etc/cron.monthly", "/etc/cron.weekly",
+    })
+    is_dir = path.endswith("/") or path.rstrip("/") in _DIR_PATHS
+    path = path.rstrip("/")
+    func = "file.directory" if is_dir else "file.managed"
     args = [("name", path)]
     if mode:
         args.append(("mode", mode))
@@ -442,9 +453,10 @@ def m_file_perms(r):
         args.append(("user", own))
     if grp:
         args.append(("group", grp))
-    args.append(("replace", False))  # enforce metadata only, never clobber content
+    if not is_dir:
+        args.append(("replace", False))  # enforce metadata only, never clobber content
     return SaltState(f"file_meta_{re.sub(r'[^A-Za-z0-9]', '_', r.short)}",
-                     "file.managed", args, "permissions", r)
+                     func, args, "permissions", r)
 
 
 @mapper
@@ -795,7 +807,7 @@ def m_rpm(r):
         flag = "--setperms" if r.short.endswith("permissions") else "--setugids"
         st = SaltState(
             r.short, "cmd.run",
-            [("name", f"rpm -qa | xargs -r -n1 rpm {flag}")],
+            [("name", f"rpm -qa | xargs -r -n1 rpm {flag} 2>/dev/null || true")],
             "rpm", r,
         )
         st.operational = True
@@ -1030,7 +1042,8 @@ def m_libuser_hash(r):
         [("name", "/etc/libuser.conf"),
          ("pattern", "^\\s*crypt_style\\s*=.*$"),
          ("repl", f"crypt_style = {alg}"),
-         ("append_if_not_found", False)],
+         ("append_if_not_found", False),
+         ("onlyif", "test -f /etc/libuser.conf")],
         "lineinfile", r,
     )
 
@@ -1057,6 +1070,7 @@ def m_limits(r):
     return SaltState(
         "limits_disable_coredumps", "file.managed",
         [("name", "/etc/security/limits.d/10-pci-coredump.conf"),
+         ("makedirs", True),
          ("mode", "0644"),
          ("contents", ["# Disable core dumps for all users (scap2salt, PCI-DSS)",
                        "* hard core 0"])],
@@ -1227,6 +1241,32 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                      "    - makedirs: True\n"
                      "    - replace: False\n"
                      "    - mode: \"0600\"\n\n")
+        if cat == "lineinfile":
+            # Optional app config files: skip state if the file is not present
+            # (package may not be installed on this system).
+            _LINEINFILE_OPTIONAL = frozenset({"/etc/postfix/main.cf"})
+            # Core config files that may be absent on minimal installs: create before replacing.
+            _LINEINFILE_PRECREATE = frozenset({
+                "/etc/login.defs",
+                "/etc/default/useradd",
+                "/etc/ssh/sshd_config.d/01-complianceascode-reinforce-os-defaults.conf",
+            })
+            precreated = set()
+            for s in states:
+                if s.fun != "file.replace":
+                    continue
+                path = next((v for k, v in s.args if k == "name"), None)
+                if path in _LINEINFILE_OPTIONAL:
+                    s.args.append(("onlyif", f"test -f {path}"))
+                elif path in _LINEINFILE_PRECREATE and path not in precreated:
+                    safe = re.sub(r"[^A-Za-z0-9]", "_", path)
+                    body += (f"# Ensure {path} exists before modifying it.\n"
+                             f"ensure_{safe}:\n"
+                             f"  file.managed:\n"
+                             f"    - name: {path}\n"
+                             f"    - makedirs: True\n"
+                             f"    - replace: False\n\n")
+                    precreated.add(path)
         body += "\n".join(s.render() for s in states)
         if cat == "audit":
             frags = [s.id for s in states if getattr(s, "audit_fragment", False)]
@@ -1749,7 +1789,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.4", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.5", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -1959,7 +1999,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.4",
+    ap.add_argument("--pkg-version", default="1.0.5",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
