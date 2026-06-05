@@ -442,6 +442,8 @@ def m_file_perms(r):
     _DIR_PATHS = frozenset({
         "/etc/cron.d", "/etc/cron.daily", "/etc/cron.hourly",
         "/etc/cron.monthly", "/etc/cron.weekly",
+        "/etc/ssh",   # sshd_pub_key rule targets the dir via find -exec chmod
+        "/tmp",       # unauthorized_world_writable targets /tmp via find -exec chmod
     })
     is_dir = path.endswith("/") or path.rstrip("/") in _DIR_PATHS
     path = path.rstrip("/")
@@ -685,6 +687,21 @@ def m_audit(r):
     if not lines:
         return None
     lines = list(dict.fromkeys(lines))
+    # stime (sys_stime) was removed from x86_64 in Linux 5.x; strip it from b64
+    # rules so augenrules --load does not fail on modern kernels.  b32 rules keep
+    # it for 32-bit compatibility.
+    _B64_DROPPED = frozenset({"stime"})
+    cleaned = []
+    for line in lines:
+        if "arch=b64" in line and any(f"-S {sc}" in line for sc in _B64_DROPPED):
+            for sc in _B64_DROPPED:
+                line = re.sub(rf'\s*-S\s+{re.escape(sc)}\b', '', line).strip()
+            if re.fullmatch(r'-a always,exit -F arch=b64(\s+-k \S+)?', line):
+                continue  # nothing left but the action header — drop entirely
+        cleaned.append(line)
+    lines = cleaned
+    if not lines:
+        return None
     frag = f"/etc/audit/rules.d/pci-{r.short}.rules"
     st = SaltState(
         f"audit_frag_{r.short}", "file.managed",
@@ -1789,7 +1806,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.5", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.6", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -1999,7 +2016,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.5",
+    ap.add_argument("--pkg-version", default="1.0.6",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
