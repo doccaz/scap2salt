@@ -472,6 +472,11 @@ def m_file_perms(r):
         args.append(("group", grp))
     if not is_dir:
         args.append(("replace", False))  # enforce metadata only, never clobber content
+        args.append(("create", False))   # only fix perms of an existing file; never
+                                         # create an empty one (e.g. /etc/ssh/sshd_config
+                                         # is shipped in /usr/etc on SLE16 — creating an
+                                         # empty /etc copy would shadow it and disable all
+                                         # sshd drop-ins)
     return SaltState(f"file_meta_{re.sub(r'[^A-Za-z0-9]', '_', r.short)}",
                      func, args, "permissions", r)
 
@@ -530,6 +535,16 @@ def m_sshd(r):
             directive, value = mm.group(1), mm.group(2)
     if directive is None:
         return None
+    # Resolve any $var_* / $sshd_* references in the value (CaC assigns them
+    # earlier in the same fix script, e.g. sshd_idle_timeout_value='300').
+    if "$" in value:
+        value = shell_resolve(value, bash)
+    if "$" in value:
+        fo = _resolve_formatted_output(bash)
+        if fo and " " in fo:
+            value = fo.split(None, 1)[1]
+        else:
+            return None  # unresolved value -> don't write a broken literal
     return SaltState(
         f"sshd_{directive}", "file.replace",
         [("name", SSHD_DROPIN),
