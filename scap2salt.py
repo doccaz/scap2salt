@@ -1258,6 +1258,30 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                      "    - makedirs: True\n"
                      "    - replace: False\n"
                      "    - mode: \"0600\"\n\n")
+        if cat == "audit":
+            # CaC time-related rules (adjtimex, settimeofday, stime) all generate
+            # the same combined rule line.  When augenrules concatenates multiple
+            # fragment files containing identical lines it gets "Rule exists" errors
+            # and exits non-zero.  Deduplicate rule lines globally across fragments
+            # before rendering; drop any fragment that becomes empty.
+            _seen = set()
+            _deduped = []
+            for s in states:
+                if not getattr(s, "audit_fragment", False):
+                    _deduped.append(s)
+                    continue
+                ci = next((i for i, (k, _) in enumerate(s.args) if k == "contents"), None)
+                if ci is None:
+                    _deduped.append(s)
+                    continue
+                orig = s.args[ci][1]
+                new_lines = [l for l in orig if l not in _seen]
+                _seen.update(orig)
+                if not new_lines:
+                    continue  # all lines already covered — omit this fragment
+                s.args[ci] = ("contents", new_lines)
+                _deduped.append(s)
+            states = _deduped
         if cat == "lineinfile":
             # Optional app config files: skip state if the file is not present
             # (package may not be installed on this system).
@@ -1806,7 +1830,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.6", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.7", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -2016,7 +2040,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.6",
+    ap.add_argument("--pkg-version", default="1.0.7",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
