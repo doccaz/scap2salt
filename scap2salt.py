@@ -304,8 +304,9 @@ def yaml_scalar(v):
     s = str(v)
     if re.fullmatch(r"0[0-7]{3,4}", s):  # file mode -> always a quoted string
         return '"' + s + '"'
-    if s == "" or re.search(r"[:#{}\[\],&*?|<>=!%@`\"']", s) or s != s.strip():
-        return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    if s == "" or "\n" in s or re.search(r"[:#{}\[\],&*?|<>=!%@`\"']", s) or s != s.strip():
+        return ('"' + s.replace("\\", "\\\\").replace('"', '\\"')
+                .replace("\n", "\\n") + '"')
     return s
 
 
@@ -1020,13 +1021,20 @@ def m_chrony(r):
     if not (cm and sm):
         return None
     conf = cm.group(1)
-    first = (sm.group(1).split(",") or ["pool.ntp.org"])[0].strip()
+    servers = [x.strip() for x in sm.group(1).split(",") if x.strip()] or ["pool.ntp.org"]
+    add = "\n".join(f"server {srv}" for srv in servers)
+    # CaC's fix only acts when NO server/pool line exists: it appends the
+    # configured servers. Mirror that exactly. The pattern matches any existing
+    # server/pool line and `repl: \g<0>` rewrites it to itself — so existing
+    # lines are left untouched (idempotent; we never clobber an admin's NTP
+    # config), and `not_found_content` is appended only when none is present.
     return SaltState(
         "chrony_remote_server", "file.replace",
         [("name", conf),
-         ("pattern", "^(server|pool)\\s+\\S+"),
-         ("repl", f"pool {first} iburst"),
-         ("append_if_not_found", True)],
+         ("pattern", r"^\s*(server|pool)\s+\S+"),
+         ("repl", r"\g<0>"),
+         ("append_if_not_found", True),
+         ("not_found_content", add)],
         "lineinfile", r,
     )
 
