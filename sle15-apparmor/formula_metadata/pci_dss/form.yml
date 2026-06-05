@@ -24,6 +24,11 @@ pci_dss:
     $default: True
     $name: "Package install / removal"
     $help: "PCI-DSS §2.2.4, §6.3 — Ensures required security packages are installed (audispd-plugins, libreswan, openssl, etc.) and prohibited packages are absent (telnet, rsh, ypbind, X11 client libs, etc.)."
+  rpm:
+    $type: boolean
+    $default: True
+    $name: "Package signatures & verification (RPM/GPG)"
+    $help: "PCI-DSS §6.3 — Enforces RPM/Zypper GPG signature checking. Ensures gpgcheck=1 in /etc/zypp/zypp.conf, verifies the SUSE GPG key is imported, and enables signature verification for all configured repositories."
   services:
     $type: boolean
     $default: True
@@ -94,11 +99,6 @@ pci_dss:
     $default: True
     $name: "File integrity monitoring (AIDE)"
     $help: "PCI-DSS §10.3.3, §11.5 — Sets up AIDE file integrity monitoring: runs aide --init to build the initial database (guarded, runs once), and enables the aide-check.timer systemd unit for periodic scheduled integrity checks."
-  rpm:
-    $type: boolean
-    $default: True
-    $name: "Package signatures & verification (RPM/GPG)"
-    $help: "PCI-DSS §6.3 — Enforces RPM/Zypper GPG signature checking. Ensures gpgcheck=1 in /etc/zypp/zypp.conf, verifies the SUSE GPG key is imported, and enables signature verification for all configured repositories."
   mac:
     $type: boolean
     $default: True

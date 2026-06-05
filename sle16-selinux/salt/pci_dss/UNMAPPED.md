@@ -1,8 +1,8 @@
 # Unmapped rules — xccdf_org.ssgproject.content_profile_pci-dss-4
 
-Generated 2026-06-05T19:21:55+00:00 from `ssg-sle16-ds.xml`.
+Generated 2026-06-05T21:10:05+00:00 from `ssg-sle16-ds.xml`.
 
-36 selected rule(s) have **no native Salt handler** and were skipped (native-only mode). Add a mapper in `scap2salt.py` or handle these via a separate reviewed state.
+38 selected rule(s) have **no native Salt handler** and were skipped (native-only mode). Add a mapper in `scap2salt.py` or handle these via a separate reviewed state.
 
 ## accounts* (10)
 - `accounts_no_uid_except_zero` — Verify Only Root Has UID 0 (PCI Req-8.5, 8.2.1, 8.2; sev high)
@@ -37,9 +37,11 @@ Generated 2026-06-05T19:21:55+00:00 from `ssg-sle16-ds.xml`.
 - `ensure_pam_wheel_group_empty` — Ensure the Group Used by pam_wheel.so Module Exists on System and is Empty (PCI 2.2.6, 2.2; sev medium)
 - `ensure_shadow_group_empty` — Ensure shadow Group is Empty (PCI Req-8.2.1, 8.3.2, 8.3; sev medium)
 
-## file* (3)
+## file* (5)
 - `file_ownership_var_log_audit` — System Audit Logs Must Be Owned By Root (PCI Req-10.5.1, 10.3.2, 10.3; sev medium)
 - `file_permissions_sshd_private_key` — Verify Permissions on SSH Server Private *_key Key Files (PCI Req-2.2.4, 2.2.6, 2.2; sev medium)
+- `file_permissions_sshd_pub_key` — Verify Permissions on SSH Server Public *.pub Key Files (PCI Req-2.2.4, 2.2.6, 2.2; sev medium)
+- `file_permissions_unauthorized_world_writable` — Ensure No World-Writable Files Exist (PCI 2.2.6, 2.2; sev medium)
 - `file_permissions_var_log_audit` — System Audit Logs Must Have Mode 0640 or Less Permissive (PCI Req-10.5, 10.3.1, 10.3; sev medium)
 
 ## gnome* (1)

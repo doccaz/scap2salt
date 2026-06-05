@@ -389,6 +389,48 @@ def m_service(r):
                      [("name", svc), ("enable", False)], "services", r)
 
 
+def _symbolic_mode_max(spec):
+    """Translate a relative symbolic chmod spec (e.g. 'u-xs,g-xws,o-xwrt') into
+    the maximum octal mode it permits: 0o7777 with every removed bit cleared.
+
+    CaC's file_permissions_* fixes use such specs — they only *clear* the
+    disallowed bits, never set an absolute mode. The matching OVAL check passes
+    for any mode lacking those bits, so the loosest compliant mode is the right
+    declarative target (and tightens the currently-failing, too-permissive
+    files). Returns a 4-digit octal string, or None if it can't be parsed."""
+    WHO = {
+        "u": {"r": 0o400, "w": 0o200, "x": 0o100, "s": 0o4000, "t": 0},
+        "g": {"r": 0o040, "w": 0o020, "x": 0o010, "s": 0o2000, "t": 0},
+        "o": {"r": 0o004, "w": 0o002, "x": 0o001, "s": 0, "t": 0o1000},
+    }
+    mode = 0o7777
+    for clause in spec.split(","):
+        m = re.match(r"^([ugoa]+)([-+=])([rwxst]+)$", clause.strip())
+        if not m:
+            return None
+        whos, op, perms = m.group(1), m.group(2), m.group(3)
+        whos = "ugo" if "a" in whos else whos
+        bits = 0
+        for w in whos:
+            for p in perms:
+                bits |= WHO[w].get(p, 0)
+        if op == "-":
+            mode &= ~bits
+        elif op == "+":
+            mode |= bits
+        else:  # '=' : set exactly for the named scope(s)
+            for w in whos:
+                mode &= ~sum(WHO[w].values())
+            mode |= bits
+    return format(mode & 0o7777, "04o")
+
+
+# Files whose OVAL requires mode 0000 on SLE (root accesses them via
+# capabilities). CaC's generic relative chmod only reaches 0640 for these.
+_PERMS_ZERO_MODE = frozenset({"/etc/shadow", "/etc/shadow-",
+                              "/etc/gshadow", "/etc/gshadow-"})
+
+
 @mapper
 def m_file_perms(r):
     if not r.short.startswith(("file_permissions_", "file_owner_", "file_groupowner_")):
@@ -409,17 +451,27 @@ def m_file_perms(r):
     if mm:
         mode, path = mm.group(1), mm.group(2)
 
-    # Symbolic chmod: chmod [flags] u-xs,g-xws,... /path  (path extractable; mode not recoverable)
+    # Symbolic chmod: chmod [flags] u-xs,g-xws,... /path  (relative spec -> max octal)
     if not path:
-        ms = re.search(r"chmod\s+(?:-\S+\s+)*([ugoa][^\s]+)\s+['\"]?(/[^\s'\"\\]+)", bash)
+        ms = re.search(r"chmod\s+(?:-\S+\s+)*([ugoa][-+=][^\s]+)\s+['\"]?(/[^\s'\"\\]+)", bash)
         if ms:
             path = ms.group(2)
+            mode = mode or _symbolic_mode_max(ms.group(1))
 
-    # find-exec chmod: find [flags] /path ... -exec chmod MODE {} \;  (directory perms)
-    if not path and "chmod" in bash:
+    # find-exec chmod on a single target: find /dir -maxdepth 0 ... -exec chmod MODE {} \;
+    # A find WITHOUT -maxdepth 0 is a filesystem-wide sweep (e.g. world-writable /
+    # suid hunts that loop over partitions) — it has no safe declarative form and
+    # must not be collapsed to a single file.directory (that would, e.g., set /tmp
+    # to a bogus mode). Leave such sweeps unmapped.
+    if not path and "chmod" in bash and "-maxdepth 0" in bash:
         mf = re.search(r'find\s+(?:-\S+\s+)*(/[^\s]+).*-exec\s+chmod', bash, re.DOTALL)
         if mf:
             path = mf.group(1).rstrip("/")
+            em = re.search(r'-exec\s+chmod\s+(?:-\S+\s+)*(\S+)', bash)
+            if em:
+                spec = em.group(1)
+                mode = mode or (spec if re.fullmatch(r"[0-7]{3,4}", spec)
+                                else _symbolic_mode_max(spec))
 
     # Literal chown: chown [flags] OWNER /path
     mo = re.search(r"chown\s+(?:-\S+\s+)*([A-Za-z0-9_.-]+)\s+['\"]?(/[^\s'\"]+)", bash)
@@ -458,14 +510,20 @@ def m_file_perms(r):
         "/etc/cron.d", "/etc/cron.daily", "/etc/cron.hourly",
         "/etc/cron.monthly", "/etc/cron.weekly",
         "/etc/ssh",   # sshd_pub_key rule targets the dir via find -exec chmod
-        "/tmp",       # unauthorized_world_writable targets /tmp via find -exec chmod
     })
     is_dir = path.endswith("/") or path.rstrip("/") in _DIR_PATHS
     path = path.rstrip("/")
+    # Shadow-family files must be 0000 on SLE (root reads via capabilities) — the
+    # OVAL requires it. CaC's generic relative chmod only yields 0640, which both
+    # fails the check and would loosen the secure default; force 0000. Documented
+    # deviation; see README "Deviations from upstream CaC".
+    if r.short.startswith("file_permissions_") and path in _PERMS_ZERO_MODE:
+        mode = "0000"
     func = "file.directory" if is_dir else "file.managed"
     args = [("name", path)]
     if mode:
-        args.append(("mode", mode))
+        # file.directory ignores `mode`; the directory's own mode is `dir_mode`.
+        args.append(("dir_mode" if is_dir else "mode", mode))
     if own:
         args.append(("user", own))
     if grp:
@@ -1256,10 +1314,15 @@ def map_rule(r):
 # Emitters
 # ----------------------------------------------------------------------------
 
-CATEGORIES = ["sysctl", "packages", "services", "permissions",
+# NOTE: 'rpm' is intentionally early (right after 'packages'). rpm_verify_ownership
+# runs a system-wide `rpm --setugids` sweep that restores package-default file
+# metadata (owner AND mode on SUSE) — it must run BEFORE the targeted file-metadata
+# hardening in 'permissions', otherwise it reverts it (e.g. /etc/cron.d 0700 -> 0755).
+# Salt executes states in include order, so category order here is the run order.
+CATEGORIES = ["sysctl", "packages", "rpm", "services", "permissions",
               "kernel_modules", "sshd", "lineinfile", "pam", "sudo",
               "audit", "dconf", "coredump", "grub", "firewall", "limits",
-              "aide", "rpm", "mounts", "mac", "misc"]
+              "aide", "mounts", "mac", "misc"]
 HEADER = "# Generated by scap2salt — DO NOT EDIT BY HAND.\n# Source: {src}\n# Profile: {prof}\n# Generated: {ts}\n\n"
 
 
