@@ -1252,16 +1252,49 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                  "{%- if p.get('enabled', True) and p.get('" + cat + "', True) %}\n\n")
         if cat == "services":
             if any(s.id == "svc_on_auditd" for s in states):
-                # audit-rules.service may be in a failed state at boot if Salt hasn't
-                # had a chance to fix stale audit rule fragments yet.  Reset its failed
-                # status before Salt tries to start auditd.service (which depends on it).
-                body += ("# Reset audit-rules.service if it is stuck in a failed state from boot.\n"
-                         "# Also flush kernel audit rules so augenrules --load won't hit 'Rule exists'\n"
-                         "# from the partially-loaded ruleset the failed boot run left behind.\n"
+                # audit-rules.service can fail in two ways:
+                # 1. "Rule exists" — duplicate lines in rule fragments (pre-v1.0.8 stale files)
+                # 2. "Operation not permitted" — auditctl rules are locked by -e 2 (immutable),
+                #    so augenrules --load cannot reload them until the next reboot.
+                #
+                # We install a systemd drop-in that wraps augenrules with an immutable check.
+                # When the kernel reports 'enabled 2', the drop-in prints a message and exits 0
+                # so that audit-rules.service succeeds and auditd can start.
+                # The ExecStart wrapper command — single-quoted bash inside double-quoted YAML.
+                # Inner " must be backslash-escaped so YAML parses them correctly.
+                _exec_raw = (
+                    "ExecStart=/bin/sh -c "
+                    "'if auditctl -s 2>/dev/null | grep -q \"enabled 2\"; "
+                    "then echo \"Audit rules immutable (-e 2), skipping reload\"; "
+                    "exit 0; fi; /sbin/augenrules --load'"
+                )
+                # Wrap in double-quoted YAML string, escaping inner double-quotes.
+                _exec_yaml = '"' + _exec_raw.replace('"', '\\"') + '"'
+                body += ("# Install a drop-in for audit-rules.service so it exits cleanly\n"
+                         "# when audit rules are already locked (immutable -e 2 flag set).\n"
+                         "audit_rules_dropin_dir:\n"
+                         "  file.directory:\n"
+                         "    - name: /etc/systemd/system/audit-rules.service.d\n"
+                         "    - mode: '0755'\n\n"
+                         "audit_rules_immutable_dropin:\n"
+                         "  file.managed:\n"
+                         "    - name: /etc/systemd/system/audit-rules.service.d/pci-immutable.conf\n"
+                         "    - mode: '0644'\n"
+                         "    - contents:\n"
+                         "        - '[Service]'\n"
+                         "        - 'ExecStart='\n"
+                         f"        - {_exec_yaml}\n\n"
+                         "audit_rules_dropin_reload:\n"
+                         "  cmd.run:\n"
+                         "    - name: systemctl daemon-reload\n"
+                         "    - onchanges:\n"
+                         "        - file: audit_rules_immutable_dropin\n\n"
                          "audit_prereq_reset:\n"
                          "  cmd.run:\n"
-                         "    - name: \"auditctl -D 2>/dev/null; systemctl reset-failed audit-rules.service 2>/dev/null || true\"\n"
-                         "    - onlyif: \"systemctl is-failed audit-rules.service 2>/dev/null\"\n\n")
+                         "    - name: \"systemctl reset-failed audit-rules.service 2>/dev/null || true\"\n"
+                         "    - onlyif: \"systemctl is-failed audit-rules.service 2>/dev/null\"\n"
+                         "    - require:\n"
+                         "        - cmd: audit_rules_dropin_reload\n\n")
                 for s in states:
                     if s.id == "svc_on_auditd":
                         s.args.append(("require", ["cmd: audit_prereq_reset"]))
@@ -1880,7 +1913,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.10", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.11", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -2090,7 +2123,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.10",
+    ap.add_argument("--pkg-version", default="1.0.11",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
