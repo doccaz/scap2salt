@@ -80,12 +80,12 @@ Coverage by category:
 | Audit (auditd rules + auditd.conf) | 49 | 49 |
 | Package install / removal | 22 | 17 |
 | SSH server hardening | 17 | 15 |
-| Config-file settings (login.defs, securetty, etc.) | 13 | 16 |
+| Config-file settings (login.defs, securetty, etc.) | 12 | 11 |
 | Kernel parameters (sysctl) | 12 | 12 |
 | Service enable / disable | 8 | 8 |
 | GNOME desktop (dconf) policy | 7 | 7 |
 | PAM module arguments (pwquality, pam_unix, pam_wheel) | 6 | 2 |
-| Package signatures & verification (RPM/GPG) | 4 | 3 |
+| Package signatures & verification (RPM/GPG) | 5 | 4 |
 | Disabled kernel modules | 3 | 3 |
 | sudo Defaults (sudoers.d drop-ins) | 3 | 3 |
 | Mandatory Access Control (SELinux / AppArmor) | — | 3 |
