@@ -1256,9 +1256,11 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                 # had a chance to fix stale audit rule fragments yet.  Reset its failed
                 # status before Salt tries to start auditd.service (which depends on it).
                 body += ("# Reset audit-rules.service if it is stuck in a failed state from boot.\n"
+                         "# Also flush kernel audit rules so augenrules --load won't hit 'Rule exists'\n"
+                         "# from the partially-loaded ruleset the failed boot run left behind.\n"
                          "audit_prereq_reset:\n"
                          "  cmd.run:\n"
-                         "    - name: systemctl reset-failed audit-rules.service 2>/dev/null || true\n"
+                         "    - name: \"auditctl -D 2>/dev/null; systemctl reset-failed audit-rules.service 2>/dev/null || true\"\n"
                          "    - onlyif: \"systemctl is-failed audit-rules.service 2>/dev/null\"\n\n")
                 for s in states:
                     if s.id == "svc_on_auditd":
@@ -1548,131 +1550,143 @@ def emit_report(outdir, meta, mapped, unmapped, na, mac, n_selected, noremed=())
 
 
 CAT_LABELS = {
-    "sysctl": "Kernel parameters (sysctl)",
-    "packages": "Package install / removal",
-    "services": "Service enable / disable",
-    "permissions": "File permissions & ownership",
-    "kernel_modules": "Disabled kernel modules",
-    "sshd": "SSH server hardening",
-    "lineinfile": "Config-file settings (login.defs, securetty, etc.)",
-    "pam": "PAM module arguments (pwquality, pam_unix, pam_wheel)",
-    "sudo": "sudo Defaults (sudoers.d drop-ins)",
-    "audit": "Audit (auditd rules + auditd.conf)",
-    "dconf": "GNOME desktop (dconf) policy",
-    "coredump": "systemd core dump policy",
-    "grub": "GRUB kernel command-line arguments",
-    "firewall": "Firewall (iptables loopback rules)",
-    "limits": "Resource limits (security/limits.d)",
-    "aide": "File integrity (AIDE)",
-    "rpm": "Package signatures & verification (RPM/GPG)",
-    "mounts": "Filesystem mount options",
-    "mac": "Mandatory Access Control (SELinux / AppArmor)",
-    "misc": "Miscellaneous",
+    "sysctl":        "Kernel parameters (sysctl)  —  PCI-DSS §2.2.7",
+    "packages":      "Package install / removal  —  PCI-DSS §2.2.4, §6.3",
+    "services":      "Service enable / disable  —  PCI-DSS §2.2.4, §6.3.3",
+    "permissions":   "File permissions & ownership  —  PCI-DSS §2.2.6, §8.6",
+    "kernel_modules":"Disabled kernel modules  —  PCI-DSS §2.2.4",
+    "sshd":          "SSH server hardening  —  PCI-DSS §2.2.4, §2.2.7, §8.3.1",
+    "lineinfile":    "Config-file settings (login.defs, securetty, etc.)  —  PCI-DSS §8.2, §8.3.9",
+    "pam":           "PAM module arguments (pwquality, pam_unix, pam_wheel)  —  PCI-DSS §8.3.6",
+    "sudo":          "Sudo defaults (sudoers.d drop-ins)  —  PCI-DSS §8.6.1",
+    "audit":         "Audit rules & auditd configuration  —  PCI-DSS §10.2, §10.3, §10.5",
+    "dconf":         "GNOME desktop (dconf) policy  —  PCI-DSS §8.6.1",
+    "coredump":      "Systemd core dump policy  —  PCI-DSS §12.3.3",
+    "grub":          "GRUB kernel command-line arguments  —  PCI-DSS §2.2.7",
+    "firewall":      "Firewall (iptables loopback rules)  —  PCI-DSS §1.3, §1.4",
+    "limits":        "Resource limits (security/limits.d)  —  PCI-DSS §12.3",
+    "aide":          "File integrity monitoring (AIDE)  —  PCI-DSS §10.3.3, §11.5",
+    "rpm":           "Package signatures & verification (RPM/GPG)  —  PCI-DSS §6.3",
+    "mounts":        "Filesystem mount options  —  PCI-DSS §2.2.4",
+    "mac":           "Mandatory Access Control (SELinux / AppArmor)  —  PCI-DSS §1.2.6, §6.3",
+    "misc":          "Miscellaneous",
 }
 
 CAT_HELP = {
     "sysctl": (
-        "Kernel parameter hardening via /etc/sysctl.d/. Covers network security "
-        "(TCP SYN cookies, ICMP redirects, IPv6 RA, source routing), ASLR, "
-        "restricted kernel pointer exposure, and core dump disabling."
+        "PCI-DSS §2.2.7 — Kernel parameter hardening via /etc/sysctl.d/. "
+        "Covers network security (TCP SYN cookies, ICMP redirects, IPv6 RA, "
+        "source routing), ASLR, restricted kernel pointer exposure, and "
+        "core dump disabling."
     ),
     "packages": (
-        "Ensures required security packages are installed (audispd-plugins, "
-        "libreswan, openssl, etc.) and prohibited packages are absent "
-        "(telnet, rsh, ypbind, X11 client libs, etc.)."
+        "PCI-DSS §2.2.4, §6.3 — Ensures required security packages are installed "
+        "(audispd-plugins, libreswan, openssl, etc.) and prohibited packages are "
+        "absent (telnet, rsh, ypbind, X11 client libs, etc.)."
     ),
     "services": (
-        "Controls systemd unit state. Enables security-critical services "
-        "(auditd, firewalld, chronyd, rsyslog, aide-check.timer) and disables "
-        "unnecessary or insecure services (avahi-daemon, nfs, rpcbind, cups, etc.)."
+        "PCI-DSS §2.2.4, §6.3.3 — Controls systemd unit state. Enables "
+        "security-critical services (auditd, firewalld, chronyd, rsyslog, "
+        "aide-check.timer) and disables unnecessary or insecure services "
+        "(avahi-daemon, nfs, rpcbind, cups, etc.)."
     ),
     "permissions": (
-        "Enforces POSIX ownership and mode on sensitive files: passwd, shadow, "
-        "sudoers, cron files, at.allow/deny, audit logs, SSH host keys, and more. "
-        "Uses file.managed with replace: False — content is never altered."
+        "PCI-DSS §2.2.6, §8.6 — Enforces POSIX ownership and mode on sensitive "
+        "files: passwd, shadow, sudoers, cron files, at.allow/deny, audit logs, "
+        "SSH host keys, and more. Uses file.managed with replace: False so "
+        "file content is never overwritten."
     ),
     "kernel_modules": (
-        "Prevents insecure kernel modules from loading by installing "
-        "'install <mod> /bin/true' drop-ins. Covers unused network protocols "
-        "(dccp, sctp, rds, tipc) and legacy filesystems (cramfs, freevxfs, "
-        "jffs2, hfs, hfsplus, squashfs, udf)."
+        "PCI-DSS §2.2.4 — Prevents insecure kernel modules from loading by "
+        "installing 'install <mod> /bin/true' drop-ins. Covers unused network "
+        "protocols (dccp, sctp, rds, tipc) and legacy filesystems (cramfs, "
+        "freevxfs, jffs2, hfs, hfsplus, squashfs, udf)."
     ),
     "sshd": (
-        "Hardens /etc/ssh/sshd_config. Disables root login, enforces Protocol 2, "
-        "sets idle timeout (ClientAliveInterval/CountMax), restricts ciphers and MACs, "
-        "disables X11 forwarding, empty passwords, and enables privilege separation."
+        "PCI-DSS §2.2.4, §2.2.7, §8.3.1 — Hardens /etc/ssh/sshd_config.d/. "
+        "Disables root login and empty passwords, restricts FIPS-validated "
+        "ciphers/MACs/KexAlgorithms, sets idle timeout (ClientAliveInterval / "
+        "CountMax), disables X11 and TCP forwarding, enables PAM."
     ),
     "lineinfile": (
-        "Config-file line enforcement for miscellaneous settings. Covers "
-        "login.defs (PASS_MAX_DAYS, PASS_MIN_DAYS, PASS_WARN_AGE, ENCRYPT_METHOD, "
-        "SHA_CRYPT rounds), /etc/default/useradd (INACTIVE), /etc/zypp/zypp.conf "
-        "(gpgcheck), securetty (restrict root console), session timeout "
-        "(autologout.sh), and chronyd remote server."
+        "PCI-DSS §8.2, §8.3.9 — Config-file line enforcement for miscellaneous "
+        "settings: login.defs (PASS_MAX_DAYS 60, PASS_WARN_AGE 7, "
+        "ENCRYPT_METHOD SHA512), /etc/default/useradd (INACTIVE=35), securetty "
+        "(restrict root console), session timeout (/etc/profile.d/autologout.sh "
+        "TMOUT=600), and chronyd remote server."
     ),
     "pam": (
-        "PAM module argument enforcement. Sets password complexity via "
-        "pam_pwquality (minlen, dcredit, ucredit, lcredit, ocredit, maxrepeat, "
-        "difok), SHA-512 hashing via pam_unix, and restricts su to the wheel "
-        "group via pam_wheel."
+        "PCI-DSS §8.3.6 — PAM module argument enforcement. Sets password "
+        "complexity via pam_pwquality (minlen, dcredit, ucredit, lcredit, "
+        "ocredit, maxrepeat, difok), SHA-512 hashing via pam_unix, and "
+        "restricts su to the wheel group via pam_wheel."
     ),
     "sudo": (
-        "Writes /etc/sudoers.d/ drop-ins enforcing sudo security defaults: "
-        "requires a TTY (requiretty), disables environment variable passing "
-        "(env_reset), and restricts the sudo log file path."
+        "PCI-DSS §8.6.1 — Writes /etc/sudoers.d/ drop-ins enforcing sudo "
+        "security defaults: requires a TTY (requiretty), disables environment "
+        "variable passing (env_reset), and restricts the sudo log file path."
     ),
     "audit": (
-        "Deploys auditd rule fragments to /etc/audit/rules.d/ (loaded via "
-        "augenrules). Covers time changes, user/group modifications, network "
-        "config changes, login/logout, file deletion, sudo usage, privileged "
-        "commands, module load/unload, and MAC policy changes. Ends with "
-        "the -e 2 immutable flag (zz-pci-immutable.rules)."
+        "PCI-DSS §10.2, §10.3, §10.5 — Deploys auditd rule fragments to "
+        "/etc/audit/rules.d/ (loaded via augenrules). Covers time changes, "
+        "user/group modifications, network config changes, login/logout, file "
+        "deletion, sudo usage, privileged commands, module load/unload, and "
+        "MAC policy changes. Ends with the -e 2 immutable flag "
+        "(zz-pci-immutable.rules)."
     ),
     "dconf": (
-        "Enforces GNOME desktop policy via /etc/dconf/db/ fragments. Locks "
-        "screen on idle (idle-delay, idle-activation-enabled), disables autorun, "
-        "enforces screensaver lock, and restricts removable media automount."
+        "PCI-DSS §8.6.1 — Enforces GNOME desktop policy via /etc/dconf/db/ "
+        "fragments. Locks screen on idle (idle-delay, idle-activation-enabled), "
+        "disables autorun, enforces screensaver lock, and restricts removable "
+        "media automount."
     ),
     "coredump": (
-        "Configures systemd coredump via /etc/systemd/coredump.conf.d/. Sets "
-        "Storage=none and ProcessSizeMax=0 to prevent core dumps from leaking "
-        "sensitive memory contents to disk."
+        "PCI-DSS §12.3.3 — Configures systemd coredump via "
+        "/etc/systemd/coredump.conf.d/. Sets Storage=none and ProcessSizeMax=0 "
+        "to prevent core dumps from leaking sensitive memory contents to disk."
     ),
     "grub": (
-        "Writes GRUB2 kernel command-line arguments via /etc/default/grub.d/. "
-        "Enables audit at boot (audit=1, audit_backlog_limit) and sets the "
-        "MAC framework kernel parameter (security=apparmor or selinux=1 enforcing=1)."
+        "PCI-DSS §2.2.7 — Writes GRUB2 kernel command-line arguments via "
+        "/etc/default/grub.d/. Enables audit at boot (audit=1, "
+        "audit_backlog_limit) and sets the MAC framework kernel parameter "
+        "(security=apparmor or selinux=1 enforcing=1)."
     ),
     "firewall": (
-        "Enforces loopback firewall rules via iptables.append states. Ensures "
-        "traffic to 127.0.0.0/8 on non-loopback interfaces is DROPped, and "
-        "lo interface traffic is ACCEPTed (IPv4 and IPv6). Review for "
-        "coexistence with firewalld/nftables."
+        "PCI-DSS §1.3, §1.4 — Enforces loopback firewall rules via "
+        "iptables.append states. Ensures traffic to 127.0.0.0/8 on "
+        "non-loopback interfaces is DROPped, and lo interface traffic is "
+        "ACCEPTed (IPv4 and IPv6). Review for coexistence with "
+        "firewalld/nftables."
     ),
     "limits": (
-        "Writes /etc/security/limits.d/ drop-ins to restrict resource usage. "
-        "Sets '* hard core 0' to prevent user-space core dumps from any account."
+        "PCI-DSS §12.3 — Writes /etc/security/limits.d/ drop-ins to restrict "
+        "resource usage. Sets '* hard core 0' to prevent user-space core dumps "
+        "from any account."
     ),
     "aide": (
-        "Sets up AIDE file integrity monitoring: runs aide --init to build the "
-        "initial database (guarded, runs once), and enables the aide-check.timer "
-        "systemd unit for periodic scheduled integrity checks."
+        "PCI-DSS §10.3.3, §11.5 — Sets up AIDE file integrity monitoring: "
+        "runs aide --init to build the initial database (guarded, runs once), "
+        "and enables the aide-check.timer systemd unit for periodic scheduled "
+        "integrity checks."
     ),
     "rpm": (
-        "Enforces RPM/Zypper GPG signature checking. Ensures gpgcheck=1 in "
-        "/etc/zypp/zypp.conf, verifies the SUSE GPG key is imported, and enables "
-        "signature verification for all configured repositories."
+        "PCI-DSS §6.3 — Enforces RPM/Zypper GPG signature checking. Ensures "
+        "gpgcheck=1 in /etc/zypp/zypp.conf, verifies the SUSE GPG key is "
+        "imported, and enables signature verification for all configured "
+        "repositories."
     ),
     "mounts": (
-        "Enforces mount options on security-sensitive filesystems. Adds nodev, "
-        "nosuid, and/or noexec to /tmp, /dev/shm, /var/tmp, /home, and /boot "
-        "via persistent fstab entries (mount.mounted with persist: True)."
+        "PCI-DSS §2.2.4 — Enforces mount options on security-sensitive "
+        "filesystems. Adds nodev, nosuid, and/or noexec to /tmp, /dev/shm, "
+        "/var/tmp, /home, and /boot via persistent fstab entries "
+        "(mount.mounted with persist: True)."
     ),
     "mac": (
-        "Mandatory Access Control. On AppArmor targets: enforces aa-enforce on "
-        "all profiles, ensures the apparmor service is running, installs "
-        "apparmor-profiles, sets security=apparmor on the kernel cmdline, and "
-        "adds an audit watch on /etc/apparmor.d/. On SELinux targets: enforces "
-        "enforcing mode and the targeted policy type."
+        "PCI-DSS §1.2.6, §6.3 — Mandatory Access Control. On AppArmor targets: "
+        "enforces aa-enforce on all profiles, ensures the apparmor service is "
+        "running, installs apparmor-profiles, sets security=apparmor on the "
+        "kernel cmdline, and adds an audit watch on /etc/apparmor.d/. On "
+        "SELinux targets: enforces enforcing mode and the targeted policy type."
     ),
 }
 
@@ -1686,12 +1700,20 @@ def emit_formula(outdir, meta, used_cats, mac):
             "pci_dss:",
             "  $type: group",
             "  $name: PCI-DSS v4 Hardening",
-            f"  $help: 'Native Salt enforcement generated from {meta['prof']} "
-            f"(MAC: {mac}). Untick a category to skip it.'",
+            ("  $help: 'Native Salt enforcement generated from "
+             + meta['prof'] + " (MAC: " + mac + "). "
+             + "Each checkbox below controls one category of states. "
+             + "Untick a category to skip it entirely. Untick Enable PCI-DSS Hardening "
+             + "to disable all categories at once.'"),
             "  enabled:",
             "    $type: boolean",
             "    $default: True",
-            "    $name: Enable PCI-DSS hardening"]
+            "    $name: Enable PCI-DSS hardening (master switch)",
+            "    $help: >-",
+            "      Master on/off switch for the entire formula. When unchecked, ALL",
+            "      category states below are skipped — no files are written, no",
+            "      services are changed. Uncheck this to temporarily suspend hardening",
+            "      without removing the formula assignment."]
     for c in used_cats:
         entry = [f"  {c}:",
                  "    $type: boolean",
@@ -1702,7 +1724,8 @@ def emit_formula(outdir, meta, used_cats, mac):
         form += entry
     write(os.path.join(fdir, "form.yml"), "\n".join(form) + "\n")
 
-    metadata = (f'description: "PCI-DSS v4 hardening generated from {meta["prof"]} '
+    metadata = ("name: PCI-DSS v4 Hardening\n"
+                f'description: "PCI-DSS v4 hardening generated from {meta["prof"]} '
                 f'(MAC: {mac})"\n'
                 "group: Security & Compliance\n"
                 "after: []\n")
@@ -1857,7 +1880,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.9", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.10", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -2067,7 +2090,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.9",
+    ap.add_argument("--pkg-version", default="1.0.10",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
