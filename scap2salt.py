@@ -349,15 +349,29 @@ def m_sysctl(r):
     )
 
 
+def _pkg_name_from_bash(bash, action):
+    """The real package name lives in the fix's zypper command and can differ
+    from the rule id (e.g. package_libselinux_installed -> libselinux1 on SLE16)."""
+    verb = "install" if action == "installed" else "remove"
+    m = re.search(rf'zypper\s+(?:-\S+\s+)*{verb}\s+(?:-\S+\s+)*["\']([A-Za-z0-9][\w.+-]*)["\']',
+                  bash or "")
+    return m.group(1) if m else None
+
+
 @mapper
 def m_package(r):
     m = re.match(r"^package_(.+)_(installed|removed)$", r.short)
     if not m:
         return None
     pkg, action = m.group(1), m.group(2)
+    # State ID stays keyed on the (unique) rule id; the installed/removed package
+    # name comes from the fix bash, which is authoritative (e.g. libselinux ->
+    # libselinux1). Two rules can resolve to the same package, so deriving the ID
+    # from the name would collide — keep them distinct.
+    name = _pkg_name_from_bash(r.bash, action) or pkg
     if action == "installed":
-        return SaltState(f"pkg_present_{pkg}", "pkg.installed", [("name", pkg)], "packages", r)
-    return SaltState(f"pkg_absent_{pkg}", "pkg.removed", [("name", pkg)], "packages", r)
+        return SaltState(f"pkg_present_{pkg}", "pkg.installed", [("name", name)], "packages", r)
+    return SaltState(f"pkg_absent_{pkg}", "pkg.removed", [("name", name)], "packages", r)
 
 
 @mapper
@@ -1352,6 +1366,7 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
             # Core config files that may be absent on minimal installs: create before replacing.
             _LINEINFILE_PRECREATE = frozenset({
                 "/etc/login.defs",
+                "/etc/login.defs.d/oscap.login.defs",
                 "/etc/default/useradd",
                 "/etc/ssh/sshd_config.d/01-complianceascode-reinforce-os-defaults.conf",
             })
