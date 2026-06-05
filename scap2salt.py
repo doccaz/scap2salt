@@ -1731,6 +1731,7 @@ def emit_formula(outdir, meta, used_cats, mac):
     # form.yml: a 'pci_dss' group whose members become pillar pci_dss:{cat}: True/False.
     # Individual booleans use $help for the tooltip; the group-level $help is shown
     # inline below the section header.
+    mac_label = "SELinux" if mac == "selinux" else "AppArmor"
     mac_note = (
         " AppArmor states are silently skipped on SLE 16 (SELinux) — "
         "the formula checks /sys/kernel/security/apparmor at runtime."
@@ -1740,18 +1741,23 @@ def emit_formula(outdir, meta, used_cats, mac):
             "  $type: group",
             "  $name: PCI-DSS v4 Hardening",
             ("  $help: 'Native Salt enforcement generated from "
-             + meta['prof'] + " (SLE 15 / AppArmor profile). "
-             + "MAC category auto-detects the active LSM: AppArmor states are "
-             + "silently skipped on SLE 16 (SELinux). "
-             + "Uncheck a category to skip it. "
-             + "Uncheck the master switch to disable everything at once.'"),
+             + meta['prof'] + " (MAC: " + mac_label + "). "
+             + "The MAC category auto-detects the active LSM at runtime. "
+             + "Uncheck a category to STOP ENFORCING it on the next highstate. "
+             + "Unchecking does NOT revert changes already applied — it only "
+             + "stops further enforcement.'"),
             "  enabled:",
             "    $type: boolean",
             "    $default: True",
             "    $name: Enable PCI-DSS v4 hardening (master switch)",
             "    $help: >-",
-            "      Master on/off switch. When unchecked, ALL category states are",
-            "      skipped — no files are written, no services are changed."]
+            "      Apply-time master gate, NOT a rollback. When checked, every"
+            " enabled",
+            "      category is enforced on each highstate. When unchecked, all",
+            "      category states are skipped on the next highstate (a no-op run)",
+            "      — but any hardening ALREADY applied stays in place; nothing is",
+            "      reverted. To undo prior changes you must restore the affected",
+            "      files/services manually."]
     for c in used_cats:
         label = CAT_LABELS.get(c, c)
         help_text = CAT_HELP.get(c, "")
@@ -1768,7 +1774,7 @@ def emit_formula(outdir, meta, used_cats, mac):
 
     metadata = ("name: PCI-DSS v4 Hardening\n"
                 f'description: "PCI-DSS v4 hardening generated from {meta["prof"]} '
-                f'(SLE 15 / AppArmor profile; MAC category auto-detects LSM at runtime)"\n'
+                f'(MAC: {mac_label}; MAC category auto-detects LSM at runtime)"\n'
                 "group: Security & Compliance\n"
                 "after: []\n")
     write(os.path.join(fdir, "metadata.yml"), metadata)
@@ -1922,7 +1928,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.13", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.14", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +

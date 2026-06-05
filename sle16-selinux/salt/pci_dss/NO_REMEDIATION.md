@@ -1,8 +1,8 @@
 # Rules with no remediation — xccdf_org.ssgproject.content_profile_pci-dss-4
 
-Generated 2026-06-03T03:00:02+00:00 from `ssg-sle15-ds.xml`.
+Generated 2026-06-05T15:46:32+00:00 from `ssg-sle16-ds.xml`.
 
-18 selected rule(s) ship **no `<fix>` of any kind** in the SSG (no shell, no Ansible). These are detective-only — there is nothing to automate. They require manual or site-specific remediation and are **not** counted against native coverage.
+16 selected rule(s) ship **no `<fix>` of any kind** in the SSG (no shell, no Ansible). These are detective-only — there is nothing to automate. They require manual or site-specific remediation and are **not** counted against native coverage.
 
 ## account* (2)
 - `account_unique_id` — Ensure All Accounts on the System Have Unique User IDs (PCI Req-8.1.1, 8.2.1, 8.2; sev medium)
@@ -35,15 +35,11 @@ Generated 2026-06-03T03:00:02+00:00 from `ssg-sle15-ds.xml`.
 ## mask* (1)
 - `mask_nonessential_services` — Ensure nonessential services are removed or masked (PCI 2.2.4, 2.2; sev low)
 
-## nftables* (1)
-- `nftables_ensure_default_deny_policy` — Ensure nftables Default Deny Firewall Policy (PCI 1.3.1, 1.3; sev medium)
-
 ## no* (1)
 - `no_files_unowned_by_user` — Ensure All Files Are Owned by a User (PCI 2.2.6, 2.2; sev medium)
 
-## set* (2)
+## set* (1)
 - `set_firewalld_default_zone` — Set Default firewalld Zone for Incoming Packets (PCI Req-1.4, 1.3.1, 1.3; sev medium)
-- `set_ip6tables_default_rule` — Set Default ip6tables Policy for Incoming Packets (PCI 1.4.1, 1.4; sev medium)
 
 ## sshd* (1)
 - `sshd_limit_user_access` — Limit Users' SSH Access (PCI Req-2.2.4, 2.2.6, 2.2; sev unknown)
