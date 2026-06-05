@@ -1250,6 +1250,20 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
         body += "\n"
         body += ("{%- set p = salt['pillar.get']('pci_dss', {}) %}\n"
                  "{%- if p.get('enabled', True) and p.get('" + cat + "', True) %}\n\n")
+        if cat == "services":
+            if any(s.id == "svc_on_auditd" for s in states):
+                # audit-rules.service may be in a failed state at boot if Salt hasn't
+                # had a chance to fix stale audit rule fragments yet.  Reset its failed
+                # status before Salt tries to start auditd.service (which depends on it).
+                body += ("# Reset audit-rules.service if it is stuck in a failed state from boot.\n"
+                         "audit_prereq_reset:\n"
+                         "  cmd.run:\n"
+                         "    - name: systemctl reset-failed audit-rules.service 2>/dev/null || true\n"
+                         "    - onlyif: \"systemctl is-failed audit-rules.service 2>/dev/null\"\n\n")
+                for s in states:
+                    if s.id == "svc_on_auditd":
+                        s.args.append(("require", ["cmd: audit_prereq_reset"]))
+                        break
         if cat == "sshd":
             body += ("# Ensure the sshd drop-in directory and file exist before any file.replace.\n"
                      "sshd_dropin_create:\n"
@@ -1406,6 +1420,10 @@ def emit_apparmor_mac(state_dir, meta, na_mac):
              f"# PCI-DSS: {', '.join(refs) or '-'}\n\n"
              "{%- set p = salt['pillar.get']('pci_dss', {}) %}\n"
              "{%- if p.get('enabled', True) and p.get('mac', True) %}\n\n"
+             "# Guard: only apply AppArmor states if AppArmor is the active LSM.\n"
+             "# On SELinux systems (e.g. SLE 16) this directory does not exist and\n"
+             "# all states below are skipped.  Redeploy with --target sle16 for SELinux.\n"
+             "{%- if salt['file.directory_exists']('/sys/kernel/security/apparmor') %}\n\n"
              "apparmor_packages:\n  pkg.installed:\n    - pkgs:\n"
              "        - apparmor-parser\n        - apparmor-profiles\n        - apparmor-utils\n\n"
              "apparmor_service:\n  service.running:\n    - name: apparmor\n    - enable: True\n"
@@ -1425,6 +1443,9 @@ def emit_apparmor_mac(state_dir, meta, na_mac):
              "    - name: /etc/audit/rules.d/pci-mac-apparmor.rules\n    - mode: \"0640\"\n"
              "    - contents:\n        - -w /etc/apparmor.d/ -p wa -k MAC-policy\n"
              "        - -w /etc/apparmor/ -p wa -k MAC-policy\n\n"
+             "{%- else %}\n"
+             "# AppArmor LSM not active on this system — MAC states skipped.\n"
+             "{%- endif %}\n\n"
              "{%- endif %}\n")
     write(os.path.join(state_dir, "mac.sls"), body)
 
@@ -1836,7 +1857,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.8", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.9", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -2046,7 +2067,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.8",
+    ap.add_argument("--pkg-version", default="1.0.9",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
