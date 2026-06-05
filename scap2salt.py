@@ -380,7 +380,7 @@ def m_file_perms(r):
             rm_m = re.search(r'rm\s+(?:-\S+\s+)*["\']?(/[^\s"\'\\]+)', bash)
             if rm_m:
                 p = rm_m.group(1)
-                return SaltState(f"file_absent_{re.sub(r'[^A-Za-z0-9]', '_', p)}",
+                return SaltState(f"file_absent_{re.sub(r'[^A-Za-z0-9]', '_', r.short)}",
                                  "file.absent", [("name", p)], "permissions", r)
         return None
     bash = r.bash or ""
@@ -443,7 +443,7 @@ def m_file_perms(r):
     if grp:
         args.append(("group", grp))
     args.append(("replace", False))  # enforce metadata only, never clobber content
-    return SaltState(f"file_meta_{re.sub(r'[^A-Za-z0-9]', '_', path)}",
+    return SaltState(f"file_meta_{re.sub(r'[^A-Za-z0-9]', '_', r.short)}",
                      "file.managed", args, "permissions", r)
 
 
@@ -512,6 +512,32 @@ def m_sshd(r):
     )
 
 
+def _resolve_formatted_output(bash):
+    """Resolve CaC's printf-v formatted_output idiom to a plain 'KEY value' string.
+
+    The idiom:
+        printf -v formatted_output "%s %s" "$stripped_key" "$var_xxx"
+        LC_ALL=C sed -i ... "s/^KEYNAME\\>.../$escaped_formatted_output/..." /path
+        printf '%s\\n' "$formatted_output" >> /path
+
+    stripped_key is derived at runtime from the file; the actual key name appears
+    in the sed expression. The value is the last argument to printf -v and is
+    resolvable via shell_resolve() because resolve_fix_bash() has already
+    substituted XCCDF values into $var_* assignments.
+    """
+    key_m = re.search(r'"s/\^\\?([A-Z][A-Z_0-9]+)', bash)
+    if not key_m:
+        return None
+    key = key_m.group(1)
+    pfv_m = re.search(r'printf\s+-v\s+formatted_output\s+"[^"]*"\s+"[^"]*"\s+"(\$[^"]+)"', bash)
+    if not pfv_m:
+        return None
+    val = shell_resolve(pfv_m.group(1), bash)
+    if "$" in val:
+        return None
+    return f"{key} {val}"
+
+
 @mapper
 def m_lineinfile(r):
     """Generic config-line setter (CaC set_config_file / lineinfile idiom).
@@ -525,6 +551,16 @@ def m_lineinfile(r):
     if not m:
         return None
     line, path = m.group(1), m.group(2)
+    # Resolve any shell variable references in the captured line.
+    if "$" in line:
+        line = shell_resolve(line, bash)
+    # CaC's printf-v formatted_output idiom: $formatted_output can't be
+    # resolved by shell_resolve() because it uses 'printf -v', not '='.
+    # Fall back to the sed-key extractor.
+    if "$" in line:
+        line = _resolve_formatted_output(bash)
+        if line is None:
+            return None
     if line.strip().startswith(("-w ", "-a ")) or "audit" in path:
         return None  # audit rules handled separately
     # derive an anchor pattern from the parameter (key=value or 'key value')
@@ -1421,6 +1457,112 @@ CAT_LABELS = {
     "misc": "Miscellaneous",
 }
 
+CAT_HELP = {
+    "sysctl": (
+        "Kernel parameter hardening via /etc/sysctl.d/. Covers network security "
+        "(TCP SYN cookies, ICMP redirects, IPv6 RA, source routing), ASLR, "
+        "restricted kernel pointer exposure, and core dump disabling."
+    ),
+    "packages": (
+        "Ensures required security packages are installed (audispd-plugins, "
+        "libreswan, openssl, etc.) and prohibited packages are absent "
+        "(telnet, rsh, ypbind, X11 client libs, etc.)."
+    ),
+    "services": (
+        "Controls systemd unit state. Enables security-critical services "
+        "(auditd, firewalld, chronyd, rsyslog, aide-check.timer) and disables "
+        "unnecessary or insecure services (avahi-daemon, nfs, rpcbind, cups, etc.)."
+    ),
+    "permissions": (
+        "Enforces POSIX ownership and mode on sensitive files: passwd, shadow, "
+        "sudoers, cron files, at.allow/deny, audit logs, SSH host keys, and more. "
+        "Uses file.managed with replace: False — content is never altered."
+    ),
+    "kernel_modules": (
+        "Prevents insecure kernel modules from loading by installing "
+        "'install <mod> /bin/true' drop-ins. Covers unused network protocols "
+        "(dccp, sctp, rds, tipc) and legacy filesystems (cramfs, freevxfs, "
+        "jffs2, hfs, hfsplus, squashfs, udf)."
+    ),
+    "sshd": (
+        "Hardens /etc/ssh/sshd_config. Disables root login, enforces Protocol 2, "
+        "sets idle timeout (ClientAliveInterval/CountMax), restricts ciphers and MACs, "
+        "disables X11 forwarding, empty passwords, and enables privilege separation."
+    ),
+    "lineinfile": (
+        "Config-file line enforcement for miscellaneous settings. Covers "
+        "login.defs (PASS_MAX_DAYS, PASS_MIN_DAYS, PASS_WARN_AGE, ENCRYPT_METHOD, "
+        "SHA_CRYPT rounds), /etc/default/useradd (INACTIVE), /etc/zypp/zypp.conf "
+        "(gpgcheck), securetty (restrict root console), session timeout "
+        "(autologout.sh), and chronyd remote server."
+    ),
+    "pam": (
+        "PAM module argument enforcement. Sets password complexity via "
+        "pam_pwquality (minlen, dcredit, ucredit, lcredit, ocredit, maxrepeat, "
+        "difok), SHA-512 hashing via pam_unix, and restricts su to the wheel "
+        "group via pam_wheel."
+    ),
+    "sudo": (
+        "Writes /etc/sudoers.d/ drop-ins enforcing sudo security defaults: "
+        "requires a TTY (requiretty), disables environment variable passing "
+        "(env_reset), and restricts the sudo log file path."
+    ),
+    "audit": (
+        "Deploys auditd rule fragments to /etc/audit/rules.d/ (loaded via "
+        "augenrules). Covers time changes, user/group modifications, network "
+        "config changes, login/logout, file deletion, sudo usage, privileged "
+        "commands, module load/unload, and MAC policy changes. Ends with "
+        "the -e 2 immutable flag (zz-pci-immutable.rules)."
+    ),
+    "dconf": (
+        "Enforces GNOME desktop policy via /etc/dconf/db/ fragments. Locks "
+        "screen on idle (idle-delay, idle-activation-enabled), disables autorun, "
+        "enforces screensaver lock, and restricts removable media automount."
+    ),
+    "coredump": (
+        "Configures systemd coredump via /etc/systemd/coredump.conf.d/. Sets "
+        "Storage=none and ProcessSizeMax=0 to prevent core dumps from leaking "
+        "sensitive memory contents to disk."
+    ),
+    "grub": (
+        "Writes GRUB2 kernel command-line arguments via /etc/default/grub.d/. "
+        "Enables audit at boot (audit=1, audit_backlog_limit) and sets the "
+        "MAC framework kernel parameter (security=apparmor or selinux=1 enforcing=1)."
+    ),
+    "firewall": (
+        "Enforces loopback firewall rules via iptables.append states. Ensures "
+        "traffic to 127.0.0.0/8 on non-loopback interfaces is DROPped, and "
+        "lo interface traffic is ACCEPTed (IPv4 and IPv6). Review for "
+        "coexistence with firewalld/nftables."
+    ),
+    "limits": (
+        "Writes /etc/security/limits.d/ drop-ins to restrict resource usage. "
+        "Sets '* hard core 0' to prevent user-space core dumps from any account."
+    ),
+    "aide": (
+        "Sets up AIDE file integrity monitoring: runs aide --init to build the "
+        "initial database (guarded, runs once), and enables the aide-check.timer "
+        "systemd unit for periodic scheduled integrity checks."
+    ),
+    "rpm": (
+        "Enforces RPM/Zypper GPG signature checking. Ensures gpgcheck=1 in "
+        "/etc/zypp/zypp.conf, verifies the SUSE GPG key is imported, and enables "
+        "signature verification for all configured repositories."
+    ),
+    "mounts": (
+        "Enforces mount options on security-sensitive filesystems. Adds nodev, "
+        "nosuid, and/or noexec to /tmp, /dev/shm, /var/tmp, /home, and /boot "
+        "via persistent fstab entries (mount.mounted with persist: True)."
+    ),
+    "mac": (
+        "Mandatory Access Control. On AppArmor targets: enforces aa-enforce on "
+        "all profiles, ensures the apparmor service is running, installs "
+        "apparmor-profiles, sets security=apparmor on the kernel cmdline, and "
+        "adds an audit watch on /etc/apparmor.d/. On SELinux targets: enforces "
+        "enforcing mode and the targeted policy type."
+    ),
+}
+
 
 def emit_formula(outdir, meta, used_cats, mac):
     """Write Uyuni / SUSE Multi-Linux Manager 'formula with form' metadata so the
@@ -1438,10 +1580,13 @@ def emit_formula(outdir, meta, used_cats, mac):
             "    $default: True",
             "    $name: Enable PCI-DSS hardening"]
     for c in used_cats:
-        form += [f"  {c}:",
+        entry = [f"  {c}:",
                  "    $type: boolean",
                  "    $default: True",
                  f"    $name: \"{CAT_LABELS.get(c, c)}\""]
+        if c in CAT_HELP:
+            entry.append(f"    $help: \"{CAT_HELP[c]}\"")
+        form += entry
     write(os.path.join(fdir, "form.yml"), "\n".join(form) + "\n")
 
     metadata = (f'description: "PCI-DSS v4 hardening generated from {meta["prof"]} '
@@ -1599,7 +1744,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.2", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.3", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -1809,7 +1954,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.2",
+    ap.add_argument("--pkg-version", default="1.0.3",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
