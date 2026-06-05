@@ -506,8 +506,7 @@ def m_sshd(r):
         [("name", SSHD_DROPIN),
          ("pattern", f"^{re.escape(directive)}\\s.*$"),
          ("repl", f"{directive} {value}"),
-         ("append_if_not_found", True),
-         ("create_if_not_found", True)],
+         ("append_if_not_found", True)],
         "sshd", r,
     )
 
@@ -574,7 +573,7 @@ def m_lineinfile(r):
         f"line_{re.sub(r'[^A-Za-z0-9]', '_', path)}_{re.sub(r'[^A-Za-z0-9]', '_', key)}",
         "file.replace",
         [("name", path), ("pattern", pattern), ("repl", line),
-         ("append_if_not_found", True), ("create_if_not_found", True)],
+         ("append_if_not_found", True)],
         "lineinfile", r,
     )
 
@@ -830,8 +829,7 @@ def m_auditd_conf(r):
         [("name", conf),
          ("pattern", f"^{re.escape(key)}\\s*=.*$"),
          ("repl", f"{key} = {val}"),
-         ("append_if_not_found", True),
-         ("create_if_not_found", True)],
+         ("append_if_not_found", True)],
         "audit", r,
     )
     st.auditd_restart = True
@@ -1014,8 +1012,7 @@ def m_chronyd_user(r):
         [("name", "/etc/sysconfig/chronyd"),
          ("pattern", "^OPTIONS=.*$"),
          ("repl", 'OPTIONS="-u chrony"'),
-         ("append_if_not_found", True),
-         ("create_if_not_found", True)],
+         ("append_if_not_found", True)],
         "lineinfile", r,
     )
 
@@ -1222,6 +1219,14 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
         body += "\n"
         body += ("{%- set p = salt['pillar.get']('pci_dss', {}) %}\n"
                  "{%- if p.get('enabled', True) and p.get('" + cat + "', True) %}\n\n")
+        if cat == "sshd":
+            body += ("# Ensure the sshd drop-in directory and file exist before any file.replace.\n"
+                     "sshd_dropin_create:\n"
+                     "  file.managed:\n"
+                     f"    - name: {SSHD_DROPIN}\n"
+                     "    - makedirs: True\n"
+                     "    - replace: False\n"
+                     "    - mode: \"0600\"\n\n")
         body += "\n".join(s.render() for s in states)
         if cat == "audit":
             frags = [s.id for s in states if getattr(s, "audit_fragment", False)]
@@ -1744,7 +1749,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.3", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.4", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -1954,7 +1959,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.3",
+    ap.add_argument("--pkg-version", default="1.0.4",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
