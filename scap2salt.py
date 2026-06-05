@@ -1498,6 +1498,32 @@ cp -a states/%{{formula}}/. %{{buildroot}}%{{_datadir}}/salt-formulas/states/%{{
 %{{_datadir}}/salt-formulas/metadata/%{{formula}}
 %{{_datadir}}/salt-formulas/states/%{{formula}}
 
+%post
+# Containerised MLM 5.x (podman-based): copy the formula into the live
+# podman volumes so the Salt master container can see it.
+# Traditional (non-containerised) deployments need /usr/share/salt-formulas
+# added to their file_roots configuration instead.
+if command -v podman >/dev/null 2>&1; then
+    _meta=$(podman volume inspect srv-formulametadata --format '{{{{.Mountpoint}}}}' 2>/dev/null || true)
+    _salt=$(podman volume inspect srv-salt --format '{{{{.Mountpoint}}}}' 2>/dev/null || true)
+    if [ -n "$_meta" ] && [ -n "$_salt" ]; then
+        mkdir -p "$_meta/%{{formula}}" "$_salt/%{{formula}}"
+        cp -a %{{_datadir}}/salt-formulas/metadata/%{{formula}}/. "$_meta/%{{formula}}/"
+        cp -a %{{_datadir}}/salt-formulas/states/%{{formula}}/. "$_salt/%{{formula}}/"
+        echo "%{{name}}: formula deployed to containerised MLM volumes."
+    fi
+fi
+
+%preun
+# On final removal (not upgrade) clean up the containerised volume copies.
+if [ $1 -eq 0 ] && command -v podman >/dev/null 2>&1; then
+    _meta=$(podman volume inspect srv-formulametadata --format '{{{{.Mountpoint}}}}' 2>/dev/null || true)
+    _salt=$(podman volume inspect srv-salt --format '{{{{.Mountpoint}}}}' 2>/dev/null || true)
+    if [ -n "$_meta" ] && [ -n "$_salt" ]; then
+        rm -rf "$_meta/%{{formula}}" "$_salt/%{{formula}}"
+    fi
+fi
+
 %changelog
 * {rpmdate} {author} - {version}-{release}
 - Generated from {prof} (MAC: {mac})
@@ -1540,9 +1566,14 @@ The files install to:
     /usr/share/salt-formulas/metadata/{formula}/   (form.yml, metadata.yml)
     /usr/share/salt-formulas/states/{formula}/      (the Salt state tree)
 
-Both paths are already in the MLM server's Salt file roots, so no extra config
-is needed. (Restart the spacewalk/uyuni services or just refresh the page if the
-formula does not appear immediately.)
+**MLM 5.x (containerised / podman-based):** the `%post` scriptlet automatically
+detects the podman volumes `srv-formulametadata` and `srv-salt` and copies the
+formula there, so the Salt master container picks it up immediately — no extra
+steps needed.
+
+**Traditional (non-containerised) MLM / Uyuni:** `/usr/share/salt-formulas/` must
+be in the server's `file_roots` configuration. If the formula does not appear,
+add the path and restart the spacewalk/uyuni services, or refresh the web page.
 
 ## Use
 
@@ -1559,7 +1590,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.0", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.1", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -1769,7 +1800,7 @@ def main():
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.0",
+    ap.add_argument("--pkg-version", default="1.0.1",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
