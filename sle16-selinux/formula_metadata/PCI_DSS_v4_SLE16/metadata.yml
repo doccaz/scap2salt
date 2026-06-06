@@ -1,0 +1,4 @@
+name: PCI-DSS v4 Hardening (SLE 16 / SELinux)
+description: "PCI-DSS v4 hardening generated from xccdf_org.ssgproject.content_profile_pci-dss-4 for SLE 16 (MAC: SELinux). Formula/pillar namespace: PCI_DSS_v4_SLE16."
+group: Security & Compliance
+after: []
