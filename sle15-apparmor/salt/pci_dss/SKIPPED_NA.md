@@ -1,6 +1,6 @@
 # Not-applicable rules (apparmor target)
 
-Generated 2026-06-06T14:51:39+00:00.
+Generated 2026-06-06T15:01:43+00:00.
 
 6 selected rule(s) are not applicable to this target's MAC framework (apparmor). Where the control intent still matters (enforce a MAC), it is covered by `mac.sls` / `MAC_EQUIVALENCE.md`.
 

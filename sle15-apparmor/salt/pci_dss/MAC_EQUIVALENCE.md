@@ -1,6 +1,6 @@
 # MAC equivalence — AppArmor target
 
-Generated 2026-06-06T14:51:39+00:00.
+Generated 2026-06-06T15:01:43+00:00.
 
 The PCI-DSS baseline expresses Mandatory Access Control via SELinux rules. This target runs **AppArmor** (SLE/Leap 15), so those rules are Not Applicable; `mac.sls` enforces the same control intent with AppArmor.
 

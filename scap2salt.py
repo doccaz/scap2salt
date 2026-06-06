@@ -1873,6 +1873,14 @@ CAT_LABELS = {
 }
 
 CAT_HELP = {
+    "accounts": (
+        "PCI-DSS §8.2, §8.3, §8.6.1 — DEFAULT OFF (opt-in). Invasive changes to "
+        "EXISTING accounts/access: ages current passwords (passwd -x / chage "
+        "--warndays/--inactive) and removes NOPASSWD/!authenticate from sudoers. "
+        "WARNING: this expires existing passwords (an expired account cannot be "
+        "fixed with chage afterwards) and can lock out users or management agents "
+        "— enable only after refreshing/excluding admin and service accounts."
+    ),
     "sysctl": (
         "PCI-DSS §2.2.7 — Kernel parameter hardening via /etc/sysctl.d/. "
         "Covers network security (TCP SYN cookies, ICMP redirects, IPv6 RA, "
