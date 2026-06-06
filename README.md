@@ -130,6 +130,23 @@ safe declarative form, so it is left in `UNMAPPED.md` rather than emitted.
 > in `/usr/etc/ssh/sshd_config`; an empty `/etc/ssh/sshd_config` will shadow it
 > and disable **all** drop-ins.
 
+### Opt-in (default-off) category: `accounts`
+
+Most categories default **on**. The `accounts` category is the exception — it
+defaults **off** (`$default: False`) because its rules mutate existing
+accounts/access and can lock people out:
+
+- existing-password aging (`passwd -x` / `chage`) **expires** current passwords;
+  an already-expired account can't even be fixed with `chage` afterwards (PAM
+  refuses) — recovery needs a direct `/etc/shadow` edit;
+- `sudo_require_authentication` comments out `NOPASSWD`, which can sever a
+  management agent's sudo access.
+
+Enable it deliberately (check the box in the MLM form / set `pci_dss:accounts:
+True`) once service and admin accounts are accounted for. Enabling it also clears
+`accounts_maximum_age_login_defs`, whose check is coupled to existing-user
+max-age.
+
 ### Reboot signalling for audit rules
 
 The audit baseline makes the ruleset immutable (`-e 2`). If audit rule fragments

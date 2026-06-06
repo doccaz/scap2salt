@@ -54,6 +54,10 @@ pci_dss:
     $default: True
     $name: "Config-file settings (login.defs, securetty…)"
     $help: "PCI-DSS §8.2, §8.3.9 — Config-file line enforcement for miscellaneous settings: login.defs (PASS_MAX_DAYS 60, PASS_WARN_AGE 7, ENCRYPT_METHOD SHA512), /etc/default/useradd (INACTIVE=35), securetty (restrict root console), session timeout (/etc/profile.d/autologout.sh TMOUT=600), and chronyd remote server."
+  accounts:
+    $type: boolean
+    $default: False
+    $name: "Invasive auth hardening: password aging + sudo re-auth (opt-in)"
   pam:
     $type: boolean
     $default: True

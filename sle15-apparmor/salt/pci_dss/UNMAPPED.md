@@ -1,16 +1,13 @@
 # Unmapped rules — xccdf_org.ssgproject.content_profile_pci-dss-4
 
-Generated 2026-06-06T14:19:45+00:00 from `ssg-sle15-ds.xml`.
+Generated 2026-06-06T14:51:39+00:00 from `ssg-sle15-ds.xml`.
 
-33 selected rule(s) have **no native Salt handler** and were skipped (native-only mode). Add a mapper in `scap2salt.py` or handle these via a separate reviewed state.
+29 selected rule(s) have **no native Salt handler** and were skipped (native-only mode). Add a mapper in `scap2salt.py` or handle these via a separate reviewed state.
 
-## accounts* (6)
+## accounts* (3)
 - `accounts_no_uid_except_zero` — Verify Only Root Has UID 0 (PCI Req-8.5, 8.2.1, 8.2; sev high)
-- `accounts_password_set_max_life_existing` — Set Existing Passwords Maximum Age (PCI 8.3.9, 8.3; sev medium)
-- `accounts_password_set_warn_age_existing` — Set Existing Passwords Warning Age (PCI 8.3.9, 8.3; sev medium)
 - `accounts_passwords_pam_tally2` — Set Deny For Failed Password Attempts (PCI Req-8.1.6, 8.3.4, 8.3; sev medium)
 - `accounts_passwords_pam_tally2_unlock_time` — Set Lockout Time for Failed Password Attempts using pam_tally2 (PCI Req-8.1.7, 8.3.4, 8.3; sev medium)
-- `accounts_set_post_pw_existing` — Set existing passwords a period of inactivity before they been locked (PCI Req-8.1.4, 8.2.6, 8.2; sev medium)
 
 ## configure* (2)
 - `configure_crypto_policy` — Configure System Cryptography Policy (PCI 2.2.7, 2.2; sev high)
@@ -64,9 +61,6 @@ Generated 2026-06-06T14:19:45+00:00 from `ssg-sle15-ds.xml`.
 
 ## set* (1)
 - `set_password_hashing_algorithm_systemauth` — Set PAM Password Hashing Algorithm - system-auth (PCI Req-8.2.1, 8.3.2, 8.3; sev medium)
-
-## sudo* (1)
-- `sudo_require_authentication` — Ensure Users Re-Authenticate for Privilege Escalation - sudo (PCI 2.2.6, 2.2; sev medium)
 
 ## wireless* (1)
 - `wireless_disable_interfaces` — Deactivate Wireless Network Interfaces (PCI Req-1.3.3, 1.3.3, 1.3; sev medium)
