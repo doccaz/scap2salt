@@ -365,11 +365,26 @@ def m_sysctl(r):
     key, val = m.group(1), m.group(2).strip().strip('"\'')
     val = shell_resolve(val, r.bash or "").split("|")[0].strip()
     conf = "/etc/sysctl.d/" + key.replace(".", "_") + ".conf"
-    return SaltState(
+    st = SaltState(
         f"sysctl_{key}", "sysctl.present",
         [("name", key), ("value", val), ("config", conf)],
         "sysctl", r,
     )
+    # net.ipv4.ip_forward=0 does not persist on firewalld hosts: firewalld 1.0+
+    # enables intra-zone forwarding by default and flips ip_forward back to 1 at
+    # boot, AFTER systemd-sysctl applies our 0. Also disable firewalld forwarding
+    # on the default zone so the hardened value survives a reboot. Guarded so it
+    # only acts when firewalld is active and forwarding is currently on.
+    if key == "net.ipv4.ip_forward" and val == "0":
+        st.extra_states.append((
+            "firewalld_disable_forwarding", "cmd.run",
+            [("name", 'zone="$(firewall-cmd --get-default-zone)"; '
+                      'firewall-cmd --permanent --zone="$zone" --remove-forward '
+                      '&& firewall-cmd --reload'),
+             ("onlyif", ["systemctl is-active --quiet firewalld",
+                         "firewall-cmd --query-forward"])],
+        ))
+    return st
 
 
 def _pkg_name_from_bash(bash, action):
