@@ -1425,15 +1425,39 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                          "        - '[Service]'\n"
                          "        - 'ExecStart='\n"
                          f"        - {_exec_yaml}\n\n"
+                         # auditd.service itself crash-loops at boot once the rules
+                         # are immutable (-e 2): its ExecStopPost (auditctl -R
+                         # audit-stop.rules) can't change rules, marking the unit
+                         # failed, and a brief boot race on registering the audit
+                         # pid ("Cannot daemonize") exhausts the default restart
+                         # limit. This drop-in ignores the immutable ExecStopPost
+                         # and gives auditd more retry headroom so it settles.
+                         "auditd_dropin_dir:\n"
+                         "  file.directory:\n"
+                         "    - name: /etc/systemd/system/auditd.service.d\n"
+                         "    - mode: '0755'\n\n"
+                         "auditd_immutable_dropin:\n"
+                         "  file.managed:\n"
+                         "    - name: /etc/systemd/system/auditd.service.d/pci-immutable.conf\n"
+                         "    - mode: '0644'\n"
+                         "    - contents:\n"
+                         "        - '[Unit]'\n"
+                         "        - 'StartLimitIntervalSec=120'\n"
+                         "        - 'StartLimitBurst=10'\n"
+                         "        - '[Service]'\n"
+                         "        - 'RestartSec=5'\n"
+                         "        - 'ExecStopPost='\n"
+                         "        - 'ExecStopPost=-/sbin/auditctl -R /etc/audit/audit-stop.rules'\n\n"
                          "audit_rules_dropin_reload:\n"
                          "  cmd.run:\n"
                          "    - name: systemctl daemon-reload\n"
                          "    - onchanges:\n"
-                         "        - file: audit_rules_immutable_dropin\n\n"
+                         "        - file: audit_rules_immutable_dropin\n"
+                         "        - file: auditd_immutable_dropin\n\n"
                          "audit_prereq_reset:\n"
                          "  cmd.run:\n"
-                         "    - name: \"systemctl reset-failed audit-rules.service 2>/dev/null || true\"\n"
-                         "    - onlyif: \"systemctl is-failed audit-rules.service 2>/dev/null\"\n"
+                         "    - name: \"systemctl reset-failed audit-rules.service auditd.service 2>/dev/null || true\"\n"
+                         "    - onlyif: \"systemctl is-failed --quiet audit-rules.service || systemctl is-failed --quiet auditd.service\"\n"
                          "    - require:\n"
                          "        - cmd: audit_rules_dropin_reload\n\n")
                 for s in states:
