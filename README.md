@@ -121,6 +121,21 @@ safe declarative form, so it is left in `UNMAPPED.md` rather than emitted.
 > in `/usr/etc/ssh/sshd_config`; an empty `/etc/ssh/sshd_config` will shadow it
 > and disable **all** drop-ins.
 
+### Reboot signalling for audit rules
+
+The audit baseline makes the ruleset immutable (`-e 2`). If audit rule fragments
+change while the kernel is *already* immutable (i.e. on a system that has booted
+with the rules locked), `augenrules --load` cannot apply them until the next
+reboot. The `audit` category detects exactly this case and writes a marker to
+`/run/scap2salt-audit-reboot-required` (tmpfs, so it clears automatically on
+reboot). A guarded `audit_reboot_required` state then **fails (shows red in the
+system's States/Events in MLM/Uyuni) only while a reboot is genuinely pending**,
+and goes green again once the host is rebooted.
+
+This is the practical signal available: MLM's own "Reboot required" banner is
+driven by `zypper needs-rebooting` (kernel/core-library updates) and has no hook
+a formula can set for a config-only change.
+
 ## Usage
 
 ```bash

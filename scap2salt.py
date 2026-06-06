@@ -1494,11 +1494,29 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
         if cat == "audit":
             frags = [s.id for s in states if getattr(s, "audit_fragment", False)]
             if frags:
+                onch = "".join(f"      - file: {salt_quote_id(i)}\n" for i in frags)
+                # Reload rules on change. If the ruleset was ALREADY immutable
+                # (-e 2) before this load, the kernel rejects the new rules until
+                # the next boot, so drop a reboot-required marker in /run (tmpfs,
+                # so it auto-clears on reboot).
                 body += ("\n# Reload audit rules once any fragment changes.\n"
                          "augenrules_load:\n  cmd.run:\n"
-                         "    - name: augenrules --load\n"
-                         "    - onchanges:\n"
-                         + "".join(f"      - file: {salt_quote_id(i)}\n" for i in frags))
+                         "    - name: '"
+                         "imm=no; auditctl -s 2>/dev/null | grep -q \"^enabled 2\" && imm=yes; "
+                         "augenrules --load 2>/dev/null || true; "
+                         "if [ \"$imm\" = yes ]; then "
+                         "echo \"scap2salt: audit rules changed but the audit config is immutable "
+                         "(-e 2) - reboot required to load them.\" > /run/scap2salt-audit-reboot-required; "
+                         "logger -t scap2salt \"audit rules changed; reboot required (audit immutable -e 2)\" "
+                         "2>/dev/null || true; fi'\n"
+                         "    - onchanges:\n" + onch)
+                # Surface the pending reboot in MLM: this state fails (shows red in
+                # the system's States/Events) ONLY while a reboot is genuinely
+                # pending, i.e. the marker exists. Green otherwise.
+                body += ("\n# Flag a pending audit-rule reboot (red in MLM until rebooted).\n"
+                         "audit_reboot_required:\n  cmd.run:\n"
+                         "    - name: 'cat /run/scap2salt-audit-reboot-required; exit 1'\n"
+                         "    - onlyif: 'test -e /run/scap2salt-audit-reboot-required'\n")
             conf = [s.id for s in states if getattr(s, "auditd_restart", False)]
             if conf:
                 body += ("\n# Restart auditd after an auditd.conf change.\n"
