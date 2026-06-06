@@ -113,6 +113,15 @@ accepts for most files. The shadow family is the exception above. Note also that
 `file_permissions_unauthorized_world_writable` is a filesystem-wide sweep with no
 safe declarative form, so it is left in `UNMAPPED.md` rather than emitted.
 
+> **`sysctl_net_ipv4_ip_forward` on container/router hosts:** the sysctl.d value
+> (`0`) is re-enabled at boot by anything that needs forwarding. The formula
+> already disables firewalld intra-zone forwarding (the usual cause) so the value
+> persists on a plain firewalld host — but **Docker/Podman/libvirt set
+> `net.ipv4.ip_forward=1` unconditionally** for container/VM networking, and that
+> cannot be turned off without breaking them. On such hosts this rule will fail by
+> design; it reflects a real host-role conflict (a PCI-scoped endpoint shouldn't
+> be routing), not a remediation gap.
+
 > Not a deviation, but worth knowing: `sshd_disable_root_login` can still report
 > *fail* if the host carries a separate drop-in (e.g. `/etc/ssh/sshd_config.d/root.conf`)
 > with `PermitRootLogin yes`. scap2salt's `00-pci-hardening.conf` sorts first so
