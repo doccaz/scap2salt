@@ -130,6 +130,19 @@ safe declarative form, so it is left in `UNMAPPED.md` rather than emitted.
 > in `/usr/etc/ssh/sshd_config`; an empty `/etc/ssh/sshd_config` will shadow it
 > and disable **all** drop-ins.
 
+### Form transparency
+
+The MLM Formulas form is built for admins to see *what* each toggle does and
+*which* PCI-DSS sections it covers at a glance, then drill down:
+
+- the always-visible toggle **label** shows the category, its headline PCI-DSS
+  sections, and a one-line gist — e.g. *"Audit rules & auditd configuration
+  [PCI 10.2, 10.3, 10.4, 10.5, 10.6, 10.7] — auditd rules (immutable -e 2)"*;
+- **hover** (`$help`) gives the fuller per-category description;
+- the group help links to **`PCI_ACTIONS.md`** — a generated per-rule reference
+  (rule id, title, severity, PCI-DSS refs, and the exact Salt action), browsable
+  on GitHub, for the full breakdown.
+
 ### Opt-in (default-off) category: `accounts`
 
 Most categories default **on**. The `accounts` category is the exception — it

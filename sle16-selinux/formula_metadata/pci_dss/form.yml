@@ -2,7 +2,7 @@
 pci_dss:
   $type: group
   $name: PCI-DSS v4 Hardening
-  $help: 'Native Salt enforcement generated from xccdf_org.ssgproject.content_profile_pci-dss-4 (MAC: SELinux). The MAC category auto-detects the active LSM at runtime. Uncheck a category to STOP ENFORCING it on the next highstate. Unchecking does NOT revert changes already applied — it only stops further enforcement.'
+  $help: 'Native Salt enforcement generated from xccdf_org.ssgproject.content_profile_pci-dss-4 (MAC: SELinux). Each toggle below names the PCI-DSS sections it covers and what it changes; hover for detail. Full per-rule reference (rule, PCI ref, exact action): https://github.com/doccaz/scap2salt/blob/main/sle16-selinux/salt/pci_dss/PCI_ACTIONS.md . The MAC category auto-detects the active LSM at runtime. Uncheck a category to STOP ENFORCING it on the next highstate; unchecking does NOT revert changes already applied.'
   enabled:
     $type: boolean
     $default: True
@@ -17,90 +17,90 @@ pci_dss:
   sysctl:
     $type: boolean
     $default: True
-    $name: "Kernel parameters (sysctl)"
+    $name: "Kernel parameters (sysctl) [PCI 1.3, 1.4, 2.2, 3.3] — kernel network/memory params"
     $help: "PCI-DSS §2.2.7 — Kernel parameter hardening via /etc/sysctl.d/. Covers network security (TCP SYN cookies, ICMP redirects, IPv6 RA, source routing), ASLR, restricted kernel pointer exposure, and core dump disabling."
   packages:
     $type: boolean
     $default: True
-    $name: "Package install / removal"
+    $name: "Package install / removal [PCI 1.2, 2.2, 10.1, 10.2, 10.3, 10.4, …] — install required / remove prohibited pkgs"
     $help: "PCI-DSS §2.2.4, §6.3 — Ensures required security packages are installed (audispd-plugins, libreswan, openssl, etc.) and prohibited packages are absent (telnet, rsh, ypbind, X11 client libs, etc.)."
   rpm:
     $type: boolean
     $default: True
-    $name: "Package signatures & verification (RPM/GPG)"
+    $name: "Package signatures & verification (RPM/GPG) [PCI 6.2, 6.3, 11.5] — RPM/GPG signature checks"
     $help: "PCI-DSS §6.3 — Enforces RPM/Zypper GPG signature checking. Ensures gpgcheck=1 in /etc/zypp/zypp.conf, verifies the SUSE GPG key is imported, and enables signature verification for all configured repositories."
   services:
     $type: boolean
     $default: True
-    $name: "Service enable / disable"
+    $name: "Service enable / disable [PCI 1.2, 2.2, 10.1, 10.2, 10.4, 10.5, …] — enable security svcs / disable risky ones"
     $help: "PCI-DSS §2.2.4, §6.3.3 — Controls systemd unit state. Enables security-critical services (auditd, firewalld, chronyd, rsyslog, aide-check.timer) and disables unnecessary or insecure services (avahi-daemon, nfs, rpcbind, cups, etc.)."
   permissions:
     $type: boolean
     $default: True
-    $name: "File permissions & ownership"
+    $name: "File permissions & ownership [PCI 1.2, 2.2, 7.1, 8.7, 10.3] — ownership & mode on sensitive files"
     $help: "PCI-DSS §2.2.6, §8.6 — Enforces POSIX ownership and mode on sensitive files: passwd, shadow, sudoers, cron files, at.allow/deny, audit logs, SSH host keys, and more. Uses file.managed with replace: False so file content is never overwritten."
   kernel_modules:
     $type: boolean
     $default: True
-    $name: "Disabled kernel modules"
+    $name: "Disabled kernel modules [PCI 1.4, 3.4] — block unused kernel modules"
     $help: "PCI-DSS §2.2.4 — Prevents insecure kernel modules from loading by installing 'install <mod> /bin/true' drop-ins. Covers unused network protocols (dccp, sctp, rds, tipc) and legacy filesystems (cramfs, freevxfs, jffs2, hfs, hfsplus, squashfs, udf)."
   sshd:
     $type: boolean
     $default: True
-    $name: "SSH server hardening"
+    $name: "SSH server hardening [PCI 2.2, 2.3, 8.1, 8.2] — harden sshd_config.d"
     $help: "PCI-DSS §2.2.4, §2.2.7, §8.3.1 — Hardens /etc/ssh/sshd_config.d/. Disables root login and empty passwords, restricts FIPS-validated ciphers/MACs/KexAlgorithms, sets idle timeout (ClientAliveInterval / CountMax), disables X11 and TCP forwarding, enables PAM."
   lineinfile:
     $type: boolean
     $default: True
-    $name: "Config-file settings (login.defs, securetty…)"
+    $name: "Config-file settings (login.defs, securetty…) [PCI 1.4, 8.1, 8.2, 8.3, 8.6, 10.4, …] — login.defs / useradd / securetty / chrony"
     $help: "PCI-DSS §8.2, §8.3.9 — Config-file line enforcement for miscellaneous settings: login.defs (PASS_MAX_DAYS 60, PASS_WARN_AGE 7, ENCRYPT_METHOD SHA512), /etc/default/useradd (INACTIVE=35), securetty (restrict root console), session timeout (/etc/profile.d/autologout.sh TMOUT=600), and chronyd remote server."
   accounts:
     $type: boolean
     $default: False
-    $name: "Invasive auth hardening: password aging + sudo re-auth (opt-in)"
+    $name: "Invasive auth hardening: password aging + sudo re-auth (opt-in) [PCI 2.2, 8.1, 8.2, 8.3] — OPT-IN: expire existing passwords + sudo re-auth"
     $help: "PCI-DSS §8.2, §8.3, §8.6.1 — DEFAULT OFF (opt-in). Invasive changes to EXISTING accounts/access: ages current passwords (passwd -x / chage --warndays/--inactive) and removes NOPASSWD/!authenticate from sudoers. WARNING: this expires existing passwords (an expired account cannot be fixed with chage afterwards) and can lock out users or management agents — enable only after refreshing/excluding admin and service accounts."
   pam:
     $type: boolean
     $default: True
-    $name: "PAM module arguments (pwquality, pam_unix, pam_wheel)"
+    $name: "PAM module arguments (pwquality, pam_unix, pam_wheel) [PCI 2.2, 8.2, 8.3] — password complexity & hashing"
     $help: "PCI-DSS §8.3.6 — PAM module argument enforcement. Sets password complexity via pam_pwquality (minlen, dcredit, ucredit, lcredit, ocredit, maxrepeat, difok), SHA-512 hashing via pam_unix, and restricts su to the wheel group via pam_wheel."
   sudo:
     $type: boolean
     $default: True
-    $name: "Sudo defaults (sudoers.d drop-ins)"
+    $name: "Sudo defaults (sudoers.d drop-ins) [PCI 2.2, 10.2] — sudoers.d Defaults (requiretty, env_reset)"
     $help: "PCI-DSS §8.6.1 — Writes /etc/sudoers.d/ drop-ins enforcing sudo security defaults: requires a TTY (requiretty), disables environment variable passing (env_reset), and restricts the sudo log file path."
   audit:
     $type: boolean
     $default: True
-    $name: "Audit rules & auditd configuration"
+    $name: "Audit rules & auditd configuration [PCI 10.2, 10.3, 10.4, 10.5, 10.6, 10.7] — auditd rules (immutable -e 2; reboot to reload)"
     $help: "PCI-DSS §10.2, §10.3, §10.5 — Deploys auditd rule fragments to /etc/audit/rules.d/ (loaded via augenrules). Covers time changes, user/group modifications, network config changes, login/logout, file deletion, sudo usage, privileged commands, module load/unload, and MAC policy changes. Ends with the -e 2 immutable flag (zz-pci-immutable.rules)."
   dconf:
     $type: boolean
     $default: True
-    $name: "GNOME desktop (dconf) policy"
+    $name: "GNOME desktop (dconf) policy [PCI 3.4, 8.1, 8.2] — GNOME screen-lock / autorun policy"
     $help: "PCI-DSS §8.6.1 — Enforces GNOME desktop policy via /etc/dconf/db/ fragments. Locks screen on idle (idle-delay, idle-activation-enabled), disables autorun, enforces screensaver lock, and restricts removable media automount."
   coredump:
     $type: boolean
     $default: True
-    $name: "Systemd core dump policy"
+    $name: "Systemd core dump policy [PCI 3.2, 3.3] — disable core dumps (systemd)"
     $help: "PCI-DSS §12.3.3 — Configures systemd coredump via /etc/systemd/coredump.conf.d/. Sets Storage=none and ProcessSizeMax=0 to prevent core dumps from leaking sensitive memory contents to disk."
   grub:
     $type: boolean
     $default: True
-    $name: "GRUB kernel command-line arguments"
+    $name: "GRUB kernel command-line arguments [PCI 10.3, 10.7] — kernel cmdline (audit=1, MAC)"
     $help: "PCI-DSS §2.2.7 — Writes GRUB2 kernel command-line arguments via /etc/default/grub.d/. Enables audit at boot (audit=1, audit_backlog_limit) and sets the MAC framework kernel parameter (security=apparmor or selinux=1 enforcing=1)."
   limits:
     $type: boolean
     $default: True
-    $name: "Resource limits (security/limits.d)"
+    $name: "Resource limits (security/limits.d) [PCI 3.3] — limits.d core-dump cap"
     $help: "PCI-DSS §12.3 — Writes /etc/security/limits.d/ drop-ins to restrict resource usage. Sets '* hard core 0' to prevent user-space core dumps from any account."
   aide:
     $type: boolean
     $default: True
-    $name: "File integrity monitoring (AIDE)"
+    $name: "File integrity monitoring (AIDE) [PCI 11.5] — AIDE file-integrity + timer"
     $help: "PCI-DSS §10.3.3, §11.5 — Sets up AIDE file integrity monitoring: runs aide --init to build the initial database (guarded, runs once), and enables the aide-check.timer systemd unit for periodic scheduled integrity checks."
   mac:
     $type: boolean
     $default: True
-    $name: "Mandatory Access Control (SELinux / AppArmor)"
+    $name: "Mandatory Access Control (SELinux / AppArmor) [PCI 1.2] — SELinux/AppArmor enforcing"
     $help: "PCI-DSS §1.2.6, §6.3 — Mandatory Access Control. On AppArmor targets: enforces aa-enforce on all profiles, ensures the apparmor service is running, installs apparmor-profiles, sets security=apparmor on the kernel cmdline, and adds an audit watch on /etc/apparmor.d/. On SELinux targets: enforces enforcing mode and the targeted policy type. AppArmor states are silently skipped on SLE 16 (SELinux) — the formula checks /sys/kernel/security/apparmor at runtime."

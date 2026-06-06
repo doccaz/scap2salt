@@ -1698,10 +1698,23 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
         pil += f"  {c}: True\n"
     write(os.path.join(pbase, "pci_dss.sls"), pil)
 
+    # Per-category headline PCI-DSS sections (top-level X.Y), aggregated from the
+    # rules actually enforced — surfaced in the form so admins see coverage at a
+    # glance.
+    cat_pci = {}
+    for st in mapped:
+        sset = cat_pci.setdefault(st.category, set())
+        for ref in st.rule.pci_refs():
+            m = re.match(r"(?:Req-)?(\d+(?:\.\d+)?)", ref)
+            if m:
+                sset.add(m.group(1))
+
     # verify / scan scripts
     emit_verify(state_dir, src, profile_id, meta)
+    # Full per-rule reference (linked from the form for "dive deeper")
+    emit_actions(state_dir, mapped, meta, mac)
     # MLM (Uyuni / SUSE Multi-Linux Manager) formula-with-form metadata
-    emit_formula(outdir, meta, used_cats, mac)
+    emit_formula(outdir, meta, used_cats, mac, cat_pci)
 
     # reports
     emit_unmapped(state_dir, unmapped, meta, profile_id)
@@ -1999,13 +2012,105 @@ CAT_HELP = {
 }
 
 
-def emit_formula(outdir, meta, used_cats, mac):
+# Base URL for the committed per-target reference doc (viewable on GitHub).
+DOC_REPO = "https://github.com/doccaz/scap2salt/blob/main"
+# Short, always-visible gist folded into each form $name (the label is the only
+# per-field text MLM shows without hovering; $help stays as the tooltip detail).
+CAT_SHORT = {
+    "sysctl": "kernel network/memory params",
+    "packages": "install required / remove prohibited pkgs",
+    "rpm": "RPM/GPG signature checks",
+    "services": "enable security svcs / disable risky ones",
+    "permissions": "ownership & mode on sensitive files",
+    "kernel_modules": "block unused kernel modules",
+    "sshd": "harden sshd_config.d",
+    "lineinfile": "login.defs / useradd / securetty / chrony",
+    "accounts": "OPT-IN: expire existing passwords + sudo re-auth",
+    "pam": "password complexity & hashing",
+    "sudo": "sudoers.d Defaults (requiretty, env_reset)",
+    "audit": "auditd rules (immutable -e 2; reboot to reload)",
+    "dconf": "GNOME screen-lock / autorun policy",
+    "coredump": "disable core dumps (systemd)",
+    "grub": "kernel cmdline (audit=1, MAC)",
+    "firewall": "iptables loopback rules",
+    "limits": "limits.d core-dump cap",
+    "aide": "AIDE file-integrity + timer",
+    "mounts": "nodev/nosuid/noexec mount options",
+    "mac": "SELinux/AppArmor enforcing",
+    "misc": "miscellaneous",
+}
+
+
+def _action_summary(st):
+    """One-line human description of what a SaltState does (for PCI_ACTIONS.md)."""
+    def a(k):
+        return next((v for k2, v in st.args if k2 == k), None)
+    name = a("name") or ""
+    f = st.fun
+    if f == "sysctl.present":    return f"sysctl `{name}` = `{a('value')}`"
+    if f == "pkg.installed":     return f"install package `{name}`"
+    if f == "pkg.removed":       return f"remove package `{name}`"
+    if f == "service.running":   return f"enable + start `{name}`"
+    if f == "service.dead":      return f"disable + stop `{name}`"
+    if f == "file.absent":       return f"ensure `{name}` absent"
+    if f == "file.replace":
+        repl = a("repl")
+        return f"line in `{name}`: `{repl}`" if repl else f"edit `{name}`"
+    if f == "file.managed":
+        mode = a("mode")
+        return f"manage `{name}`" + (f" (mode {mode})" if mode else "")
+    if f == "file.directory":
+        mode = a("dir_mode") or a("mode")
+        return f"dir `{name}`" + (f" (mode {mode})" if mode else "")
+    if f == "selinux.mode":      return f"SELinux mode `{name}`"
+    if f.startswith("iptables"): return f"{f} `{name}`"
+    if f == "cmd.run":
+        n = name if len(name) <= 90 else name[:87] + "…"
+        return ("operational " if st.operational else "") + f"cmd: `{n}`"
+    return f"{f} `{name}`"
+
+
+def emit_actions(state_dir, mapped, meta, mac):
+    """Full per-rule reference (PCI_ACTIONS.md): every enforced rule with its
+    PCI-DSS references, severity and the concrete Salt action, grouped by the
+    same categories as the MLM form toggles. Committed in the example trees so it
+    renders as a browsable view on GitHub."""
+    by_cat = {}
+    for st in mapped:
+        by_cat.setdefault(st.category, []).append(st)
+    lines = ["# PCI-DSS v4 — actions reference", "",
+             f"Generated {meta['ts']} from `{meta['src']}` "
+             f"(profile `{meta['prof']}`, MAC: {mac}).", "",
+             "Every rule this formula enforces, with its PCI-DSS reference and the "
+             "concrete action. Sections match the toggles in the MLM Formulas form; "
+             "the **accounts** category is opt-in (default off).", ""]
+    for cat in CATEGORIES:
+        sts = by_cat.get(cat)
+        if not sts:
+            continue
+        lines += [f"## {CAT_LABELS.get(cat, cat)} (`{cat}`)", "",
+                  "| Rule | Sev | PCI-DSS | Action |", "|---|---|---|---|"]
+        for st in sorted(sts, key=lambda s: s.rule.short):
+            refs = ", ".join(st.rule.pci_refs()) or "—"
+            title = (st.rule.title or "").replace("|", "\\|")
+            lines.append(f"| `{st.rule.short}`<br><sub>{title}</sub> | "
+                         f"{st.rule.severity} | {refs} | {_action_summary(st)} |")
+        lines.append("")
+    write(os.path.join(state_dir, "PCI_ACTIONS.md"), "\n".join(lines) + "\n")
+
+
+def emit_formula(outdir, meta, used_cats, mac, cat_pci=None):
     """Write Uyuni / SUSE Multi-Linux Manager 'formula with form' metadata so the
-    pillar toggles render as checkboxes in the Web UI (Formulas tab)."""
+    pillar toggles render as checkboxes in the Web UI (Formulas tab).
+
+    Transparency model: the always-visible $name carries the category, its
+    headline PCI-DSS sections and a one-line gist (admin sees what + which PCI at
+    a glance); $help is the hover detail; the group $help links to PCI_ACTIONS.md
+    for the full per-rule breakdown."""
+    cat_pci = cat_pci or {}
     fdir = os.path.join(outdir, "srv", "formula_metadata", "pci_dss")
-    # form.yml: a 'pci_dss' group whose members become pillar pci_dss:{cat}: True/False.
-    # Individual booleans use $help for the tooltip; the group-level $help is shown
-    # inline below the section header.
+    doc_tree = "sle16-selinux" if mac == "selinux" else "sle15-apparmor"
+    doc_url = f"{DOC_REPO}/{doc_tree}/salt/pci_dss/PCI_ACTIONS.md"
     mac_label = "SELinux" if mac == "selinux" else "AppArmor"
     mac_note = (
         " AppArmor states are silently skipped on SLE 16 (SELinux) — "
@@ -2017,10 +2122,12 @@ def emit_formula(outdir, meta, used_cats, mac):
             "  $name: PCI-DSS v4 Hardening",
             ("  $help: 'Native Salt enforcement generated from "
              + meta['prof'] + " (MAC: " + mac_label + "). "
+             + "Each toggle below names the PCI-DSS sections it covers and what it "
+             + "changes; hover for detail. Full per-rule reference (rule, PCI ref, "
+             + "exact action): " + doc_url + " . "
              + "The MAC category auto-detects the active LSM at runtime. "
-             + "Uncheck a category to STOP ENFORCING it on the next highstate. "
-             + "Unchecking does NOT revert changes already applied — it only "
-             + "stops further enforcement.'"),
+             + "Uncheck a category to STOP ENFORCING it on the next highstate; "
+             + "unchecking does NOT revert changes already applied.'"),
             "  enabled:",
             "    $type: boolean",
             "    $default: True",
@@ -2038,10 +2145,17 @@ def emit_formula(outdir, meta, used_cats, mac):
         help_text = CAT_HELP.get(c, "")
         if c == "mac":
             help_text = help_text + mac_note
+        # Always-visible label: category (PCI sections) — one-line gist.
+        refs = sorted(cat_pci.get(c, set()),
+                      key=lambda s: [int(x) for x in s.split(".")])
+        shown = refs[:6] + (["…"] if len(refs) > 6 else [])
+        pci = f" [PCI {', '.join(shown)}]" if refs else ""
+        gist = CAT_SHORT.get(c, "")
+        name = f"{label}{pci}" + (f" — {gist}" if gist else "")
         entry = [f"  {c}:",
                  "    $type: boolean",
                  f"    $default: {'False' if c in OPT_IN_CATEGORIES else 'True'}",
-                 f"    $name: \"{label}\""]
+                 f"    $name: {yaml_scalar(name)}"]
         if help_text:
             entry.append(f"    $help: \"{help_text}\"")
         form += entry

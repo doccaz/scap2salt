@@ -215,7 +215,8 @@ The rationale is documented per rule in `MAC_EQUIVALENCE.md` (written alongside 
 | `emit_noremed()` | `NO_REMEDIATION.md` listing rules the SSG ships no fix for (detective-only) |
 | `emit_readme()` | `README.md` inside the generated state dir (deploy instructions) |
 | `emit_verify()` | Three shell scripts in `_verify/` |
-| `emit_formula()` | `form.yml` + `metadata.yml` for MLM Formulas tab |
+| `emit_actions()` | `PCI_ACTIONS.md` — full per-rule reference (rule, severity, PCI-DSS refs, concrete action) grouped by category; linked from the form for "dive deeper" |
+| `emit_formula()` | `form.yml` + `metadata.yml` for MLM Formulas tab. Transparency model: always-visible `$name` = category + headline PCI-DSS sections (from `cat_pci`) + one-line gist (`CAT_SHORT`); `$help` = hover detail (`CAT_HELP`); group `$help` links to `PCI_ACTIONS.md`. `OPT_IN_CATEGORIES` (e.g. `accounts`) render `$default: False`. |
 | `emit_package()` | MLM Salt **formula RPM** under `out/package/` (spec + tarball + `build.sh` + README, and the built `.rpm` if `rpmbuild` is present); gated by `--package` |
 | `emit_report()` | Standalone `coverage-report.md` (headline %, per-category mapped table, guarded operational list, unmapped rules grouped by family, N/A list); used by `--report-only` |
 
