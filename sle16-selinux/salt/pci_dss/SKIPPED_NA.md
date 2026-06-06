@@ -1,6 +1,6 @@
 # Not-applicable rules (selinux target)
 
-Generated 2026-06-06T15:12:09+00:00.
+Generated 2026-06-06T17:24:28+00:00.
 
 1 selected rule(s) are not applicable to this target's MAC framework (selinux). Where the control intent still matters (enforce a MAC), it is covered by `mac.sls` / `MAC_EQUIVALENCE.md`.
 

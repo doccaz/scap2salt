@@ -41,7 +41,7 @@ CAC_ZIP_URL = (
 )
 
 # Runtime config shared with mappers (set in main()).
-CONFIG = {"mac": "apparmor"}
+CONFIG = {"mac": "apparmor", "formula": "pci_dss"}
 
 # XCCDF Value defaults populated once in main() via load_values(); used to
 # resolve <sub idref="..."/> substitution placeholders in bash fix scripts.
@@ -271,6 +271,11 @@ class SaltState:
     def __init__(self, sid, fun, args, category, rule):
         self.id = sid          # state id (unique within file)
         self.fun = fun         # e.g. 'sysctl.present'
+        # file.replace defaults to writing a `.bak`; in scanned drop-in dirs
+        # (sshd_config.d, audit/rules.d) that stray copy doubles the directive
+        # count and trips "exactly once" OVAL checks. Disable backups.
+        if fun == "file.replace" and not any(k == "backup" for k, _ in args):
+            args = args + [("backup", False)]
         self.args = args       # list of (key, value) ; value None => bare arg
         self.category = category
         self.rule = rule
@@ -626,6 +631,22 @@ SSHD_TABLE = {
 # sshd rules that are not a single config directive (skip — handled elsewhere / N/A).
 SSHD_SKIP = {"sshd_use_strong_rng", "sshd_install_libpam_ssh"}
 SSHD_DROPIN = "/etc/ssh/sshd_config.d/00-pci-hardening.conf"
+SSHD_MAIN = "/etc/ssh/sshd_config"
+# usr-etc OSes (SLE16+/Leap16/MicroOS6+/SLMicro/Tumbleweed) ship sshd_config in
+# /usr/etc and their SSG OVAL reads the /etc/ssh/sshd_config.d drop-ins, so we
+# write a drop-in there. Traditional OSes (SLE15/Leap15) read AND check the main
+# /etc/ssh/sshd_config, so we must write the directives there instead.
+_SSHD_USRETC_PREFIXES = ("sle16", "sle_16", "leap16", "slmicro", "sl-micro",
+                         "microos", "tumbleweed", "opensuse-microos")
+
+
+def sshd_target_file():
+    t = (CONFIG.get("target") or "").lower()
+    return SSHD_DROPIN if t.startswith(_SSHD_USRETC_PREFIXES) else SSHD_MAIN
+
+
+def sshd_uses_dropin():
+    return sshd_target_file() == SSHD_DROPIN
 
 
 @mapper
@@ -662,7 +683,7 @@ def m_sshd(r):
             return None  # unresolved value -> don't write a broken literal
     return SaltState(
         f"sshd_{directive}", "file.replace",
-        [("name", SSHD_DROPIN),
+        [("name", sshd_target_file()),
          ("pattern", f"^{re.escape(directive)}\\s.*$"),
          ("repl", f"{directive} {value}"),
          ("append_if_not_found", True)],
@@ -1446,7 +1467,8 @@ def write(path, content):
 
 def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
     base = os.path.join(outdir, "srv", "salt")
-    state_dir = os.path.join(base, "pci_dss")
+    fname = CONFIG["formula"]
+    state_dir = os.path.join(base, fname)
     meta = dict(src=os.path.basename(src), prof=profile_id,
                 ts=datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
@@ -1470,7 +1492,7 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                      "# package + Salt iptables module on the minion.\n")
         body += "\n"
         _cat_default = "False" if cat in OPT_IN_CATEGORIES else "True"
-        body += ("{%- set p = salt['pillar.get']('pci_dss', {}) %}\n"
+        body += ("{%- set p = salt['pillar.get']('" + fname + "', {}) %}\n"
                  "{%- if p.get('enabled', True) and p.get('" + cat + "', "
                  + _cat_default + ") %}\n\n")
         if cat == "services":
@@ -1546,7 +1568,7 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                     if s.id == "svc_on_auditd":
                         s.args.append(("require", ["cmd: audit_prereq_reset"]))
                         break
-        if cat == "sshd":
+        if cat == "sshd" and sshd_uses_dropin():
             body += ("# Ensure the sshd drop-in directory and file exist before any file.replace.\n"
                      "sshd_dropin_create:\n"
                      "  file.managed:\n"
@@ -1554,6 +1576,27 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                      "    - makedirs: True\n"
                      "    - replace: False\n"
                      "    - mode: \"0600\"\n\n")
+            # SLE ships some of these directives uncommented in /etc/ssh/sshd_config;
+            # the sshd OVAL requires each EXACTLY ONCE across all sshd config files.
+            # Strip our managed directives from the main config and any other drop-in
+            # so only our drop-in defines them (mirrors CaC's remove-then-write).
+            directives = sorted({
+                next((v for k, v in s.args if k == "repl"), "").split()[0]
+                for s in states if s.fun == "file.replace"
+            } - {""})
+            if directives:
+                alt = "|".join(directives)
+                ours = os.path.basename(SSHD_DROPIN)
+                body += (
+                    "# Keep each managed directive in our drop-in only (SLE's stock\n"
+                    "# sshd_config sets some of them; the OVAL wants exactly one).\n"
+                    "sshd_dedup_managed:\n  cmd.run:\n"
+                    f"    - name: \"sed -ri '/^[[:space:]]*({alt})[[:space:]]/d' "
+                    f"/etc/ssh/sshd_config $(ls /etc/ssh/sshd_config.d/*.conf 2>/dev/null "
+                    f"| grep -v {ours})\"\n"
+                    f"    - onlyif: \"grep -rEl '^[[:space:]]*({alt})[[:space:]]' "
+                    "/etc/ssh/sshd_config /etc/ssh/sshd_config.d/ 2>/dev/null | "
+                    f"grep -qv {ours}\"\n\n")
         if cat == "audit":
             # CaC time-related rules (adjtimex, settimeofday, stime) all generate
             # the same combined rule line.  When augenrules concatenates multiple
@@ -1675,7 +1718,7 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
 
     # init.sls
     init = HEADER.format(**meta) + "include:\n"
-    init += "".join(f"  - pci_dss.{c}\n" for c in used_cats)
+    init += "".join(f"  - {fname}.{c}\n" for c in used_cats)
     write(os.path.join(state_dir, "init.sls"), init)
 
     # top.sls (state)
@@ -1684,19 +1727,19 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
             "  # Target your PCI in-scope SUSE clients here (grain/group match).\n"
             "  'G@os_family:Suse and G@pci_scope:true':\n"
             "    - match: compound\n"
-            "    - pci_dss\n")
+            f"    - {fname}\n")
     write(os.path.join(base, "top.sls"), top)
 
     # pillar
     pbase = os.path.join(outdir, "srv", "pillar")
     ptop = ("base:\n  'G@os_family:Suse and G@pci_scope:true':\n"
-            "    - match: compound\n    - pci_dss\n")
+            f"    - match: compound\n    - {fname}\n")
     write(os.path.join(pbase, "top.sls"), ptop)
     pil = HEADER.format(**meta)
-    pil += "pci_dss:\n  enabled: True\n"
+    pil += f"{fname}:\n  enabled: True\n"
     for c in used_cats:
         pil += f"  {c}: True\n"
-    write(os.path.join(pbase, "pci_dss.sls"), pil)
+    write(os.path.join(pbase, f"{fname}.sls"), pil)
 
     # Per-category headline PCI-DSS sections (top-level X.Y), aggregated from the
     # rules actually enforced — surfaced in the form so admins see coverage at a
@@ -1732,7 +1775,7 @@ def emit_apparmor_mac(state_dir, meta, na_mac):
     body += ("# AppArmor MAC equivalence (target uses AppArmor, not SELinux).\n"
              f"# Satisfies the control intent of: {covered}\n"
              f"# PCI-DSS: {', '.join(refs) or '-'}\n\n"
-             "{%- set p = salt['pillar.get']('pci_dss', {}) %}\n"
+             "{%- set p = salt['pillar.get']('" + CONFIG["formula"] + "', {}) %}\n"
              "{%- if p.get('enabled', True) and p.get('mac', True) %}\n\n"
              "# Guard: only apply AppArmor states if AppArmor is the active LSM.\n"
              "# On SELinux systems (e.g. SLE 16) this directory does not exist and\n"
@@ -2108,16 +2151,17 @@ def emit_formula(outdir, meta, used_cats, mac, cat_pci=None):
     a glance); $help is the hover detail; the group $help links to PCI_ACTIONS.md
     for the full per-rule breakdown."""
     cat_pci = cat_pci or {}
-    fdir = os.path.join(outdir, "srv", "formula_metadata", "pci_dss")
+    fname = CONFIG["formula"]
+    fdir = os.path.join(outdir, "srv", "formula_metadata", fname)
     doc_tree = "sle16-selinux" if mac == "selinux" else "sle15-apparmor"
-    doc_url = f"{DOC_REPO}/{doc_tree}/salt/pci_dss/PCI_ACTIONS.md"
+    doc_url = f"{DOC_REPO}/{doc_tree}/salt/{fname}/PCI_ACTIONS.md"
     mac_label = "SELinux" if mac == "selinux" else "AppArmor"
     mac_note = (
         " AppArmor states are silently skipped on SLE 16 (SELinux) — "
         "the formula checks /sys/kernel/security/apparmor at runtime."
     )
     form = ["# Generated by scap2salt — renders in the MLM Web UI 'Formulas' tab.",
-            "pci_dss:",
+            f"{fname}:",
             "  $type: group",
             "  $name: PCI-DSS v4 Hardening",
             ("  $help: 'Native Salt enforcement generated from "
@@ -2323,6 +2367,10 @@ def emit_package(outdir, meta, mac, version="1.0.14", release="0"):
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
     build.sh + README, and runs rpmbuild if available. Returns the .rpm path (or
     the spec path if rpmbuild is unavailable)."""
+    FORMULA = CONFIG["formula"]
+    # Distinct RPM name per formula so per-OS formulas can be installed together.
+    PKG_NAME = ("pci-dss-hardening-formula" if FORMULA == "pci_dss"
+                else FORMULA.replace("_", "-") + "-hardening-formula")
     srv = os.path.join(outdir, "srv")
     src_meta = os.path.join(srv, "formula_metadata", FORMULA)
     src_states = os.path.join(srv, "salt", FORMULA)
@@ -2525,14 +2573,24 @@ def main():
                     help="MAC framework of the target (default: inferred from --target)")
     ap.add_argument("--report-only", action="store_true",
                     help="Dry run: classify rules and write only a coverage report (no state tree)")
+    ap.add_argument("--formula-name", default="pci_dss",
+                    help="Salt formula name = state dir, pillar namespace and form "
+                         "key (default: pci_dss). Use distinct names to run per-OS "
+                         "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
     ap.add_argument("--pkg-version", default="1.0.13",
                     help="Version for the formula RPM (default: 1.0.0)")
     args = ap.parse_args()
 
+    CONFIG["target"] = args.target
     CONFIG["mac"] = args.mac or mac_for_target(args.target)
-    print(f"[*] Target {args.target}: MAC framework = {CONFIG['mac']}")
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", args.formula_name):
+        sys.exit(f"[!] Invalid --formula-name '{args.formula_name}' "
+                 "(must be a Salt id: letters, digits, underscore).")
+    CONFIG["formula"] = args.formula_name
+    print(f"[*] Target {args.target}: MAC framework = {CONFIG['mac']}, "
+          f"formula = {CONFIG['formula']}")
 
     ds = acquire_datastream(args.target, args.datastream, args.cache)
     bench = load_benchmark(ds)

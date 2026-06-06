@@ -243,13 +243,14 @@ This lets operators disable any category without editing state files.
 | `--out` | `./out` | Root of the generated output tree |
 | `--cache` | `./.cache` | Where downloaded datastream XML is cached |
 | `--mac` | _(inferred)_ | Override MAC detection (`selinux` or `apparmor`) |
+| `--formula-name` | `pci_dss` | Salt formula name = state dir, pillar namespace, and form top-key. Use distinct names (`pci_dss_sle15`, `pci_dss_sle16`) to run per-OS formulas side by side on one MLM server. Threaded via `CONFIG["formula"]`. |
 | `--report-only` | — | No state files; writes only `out/coverage-report.md` |
 
 ---
 
 ## Runtime global
 
-`CONFIG = {"mac": "apparmor"}` is set once in `main()` and read by `m_mac()` and several emitters. It is intentionally a module-level dict (not passed through every call) because the MAC setting cross-cuts many mappers and emitters.
+`CONFIG = {"mac": "apparmor", "formula": "pci_dss"}` is set once in `main()` and read by `m_mac()` and several emitters. It is intentionally a module-level dict (not passed through every call) because the MAC setting and formula name cross-cut many mappers and emitters. `CONFIG["formula"]` (from `--formula-name`) drives the state dir, pillar namespace, `init.sls` includes, form top-key, doc link, and RPM/package name — so per-OS formulas (`pci_dss_sle15`, `pci_dss_sle16`) coexist on one MLM server, assigned per system-group. One codebase regenerates both, so fixes apply to both at once.
 
 ---
 

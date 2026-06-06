@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-06-06T15:12:09+00:00 from `ssg-sle15-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: apparmor).
+Generated 2026-06-06T17:24:28+00:00 from `ssg-sle15-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: apparmor).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -140,23 +140,23 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 
 | Rule | Sev | PCI-DSS | Action |
 |---|---|---|---|
-| `sshd_disable_empty_passwords`<br><sub>Disable SSH Access via Empty Passwords</sub> | high | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `PermitEmptyPasswords no` |
-| `sshd_disable_rhosts`<br><sub>Disable SSH Support for .rhosts Files</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `IgnoreRhosts yes` |
-| `sshd_disable_root_login`<br><sub>Disable SSH Root Login</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `PermitRootLogin no` |
-| `sshd_disable_tcp_forwarding`<br><sub>Disable SSH TCP Forwarding</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `AllowTcpForwarding no` |
-| `sshd_disable_x11_forwarding`<br><sub>Disable X11 Forwarding</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `X11Forwarding no` |
-| `sshd_do_not_permit_user_env`<br><sub>Do Not Allow SSH Environment Options</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `PermitUserEnvironment no` |
-| `sshd_enable_pam`<br><sub>Enable PAM</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `UsePAM yes` |
-| `sshd_set_idle_timeout`<br><sub>Set SSH Client Alive Interval</sub> | medium | Req-8.1.8, 8.2.8, 8.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `ClientAliveInterval 900` |
-| `sshd_set_keepalive`<br><sub>Set SSH Client Alive Count Max</sub> | medium | Req-8.1.8, 8.2.8, 8.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `ClientAliveCountMax 1` |
-| `sshd_set_login_grace_time`<br><sub>Ensure SSH LoginGraceTime is configured</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `LoginGraceTime 60` |
-| `sshd_set_loglevel_verbose`<br><sub>Set SSH Daemon LogLevel to VERBOSE</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `LogLevel VERBOSE` |
-| `sshd_set_max_auth_tries`<br><sub>Set SSH authentication attempt limit</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `MaxAuthTries 4` |
-| `sshd_set_max_sessions`<br><sub>Set SSH MaxSessions limit</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `MaxSessions 10` |
-| `sshd_set_maxstartups`<br><sub>Ensure SSH MaxStartups is configured</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `MaxStartups 10:30:100` |
-| `sshd_use_approved_ciphers`<br><sub>Use Only FIPS 140-2 Validated Ciphers</sub> | medium | 2.2.7, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr` |
-| `sshd_use_approved_macs`<br><sub>Use Only FIPS 140-2 Validated MACs</sub> | medium | 2.2.7, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256` |
-| `sshd_use_strong_kex`<br><sub>Use Only Strong Key Exchange algorithms</sub> | medium | Req-2.3, 2.2.7, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `KexAlgorithms ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256` |
+| `sshd_disable_empty_passwords`<br><sub>Disable SSH Access via Empty Passwords</sub> | high | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `PermitEmptyPasswords no` |
+| `sshd_disable_rhosts`<br><sub>Disable SSH Support for .rhosts Files</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `IgnoreRhosts yes` |
+| `sshd_disable_root_login`<br><sub>Disable SSH Root Login</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `PermitRootLogin no` |
+| `sshd_disable_tcp_forwarding`<br><sub>Disable SSH TCP Forwarding</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `AllowTcpForwarding no` |
+| `sshd_disable_x11_forwarding`<br><sub>Disable X11 Forwarding</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `X11Forwarding no` |
+| `sshd_do_not_permit_user_env`<br><sub>Do Not Allow SSH Environment Options</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `PermitUserEnvironment no` |
+| `sshd_enable_pam`<br><sub>Enable PAM</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `UsePAM yes` |
+| `sshd_set_idle_timeout`<br><sub>Set SSH Client Alive Interval</sub> | medium | Req-8.1.8, 8.2.8, 8.2 | line in `/etc/ssh/sshd_config`: `ClientAliveInterval 900` |
+| `sshd_set_keepalive`<br><sub>Set SSH Client Alive Count Max</sub> | medium | Req-8.1.8, 8.2.8, 8.2 | line in `/etc/ssh/sshd_config`: `ClientAliveCountMax 1` |
+| `sshd_set_login_grace_time`<br><sub>Ensure SSH LoginGraceTime is configured</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `LoginGraceTime 60` |
+| `sshd_set_loglevel_verbose`<br><sub>Set SSH Daemon LogLevel to VERBOSE</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `LogLevel VERBOSE` |
+| `sshd_set_max_auth_tries`<br><sub>Set SSH authentication attempt limit</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `MaxAuthTries 4` |
+| `sshd_set_max_sessions`<br><sub>Set SSH MaxSessions limit</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `MaxSessions 10` |
+| `sshd_set_maxstartups`<br><sub>Ensure SSH MaxStartups is configured</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config`: `MaxStartups 10:30:100` |
+| `sshd_use_approved_ciphers`<br><sub>Use Only FIPS 140-2 Validated Ciphers</sub> | medium | 2.2.7, 2.2 | line in `/etc/ssh/sshd_config`: `Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr` |
+| `sshd_use_approved_macs`<br><sub>Use Only FIPS 140-2 Validated MACs</sub> | medium | 2.2.7, 2.2 | line in `/etc/ssh/sshd_config`: `MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256` |
+| `sshd_use_strong_kex`<br><sub>Use Only Strong Key Exchange algorithms</sub> | medium | Req-2.3, 2.2.7, 2.2 | line in `/etc/ssh/sshd_config`: `KexAlgorithms ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256` |
 
 ## Config-file settings (login.defs, securetty…) (`lineinfile`)
 
