@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-06-06T17:30:52+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
+Generated 2026-06-06T17:44:33+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 

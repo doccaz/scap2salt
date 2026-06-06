@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-06-06T17:30:52+00:00 from `ssg-sle15-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: apparmor).
+Generated 2026-06-06T17:44:33+00:00 from `ssg-sle15-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: apparmor).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -168,7 +168,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `accounts_tmout`<br><sub>Set Interactive Session Timeout</sub> | medium | 8.6.1, 8.6 | manage `/etc/profile.d/autologout.sh` (mode 0755) |
 | `chronyd_run_as_chrony_user`<br><sub>Ensure that chronyd is running under chrony user account</sub> | medium | 10.6.3, 10.6 | line in `/etc/sysconfig/chronyd`: `OPTIONS="-u chrony"` |
 | `chronyd_specify_remote_server`<br><sub>A remote time server for Chrony is configured</sub> | medium | Req-10.4.3, 10.6.2, 10.6 | line in `/etc/chrony.conf`: `\g<0>` |
-| `disable_host_auth`<br><sub>Disable Host-Based Authentication</sub> | medium | 8.3.1, 8.3 | line in `/etc/ssh/sshd_config.d/01-complianceascode-reinforce-os-defaults.conf`: `HostbasedAuthentication no` |
+| `disable_host_auth`<br><sub>Disable Host-Based Authentication</sub> | medium | 8.3.1, 8.3 | line in `/etc/ssh/sshd_config`: `HostbasedAuthentication no` |
 | `no_direct_root_logins`<br><sub>Direct root Logins Not Allowed</sub> | medium | 8.6.1, 8.6 | manage `/etc/securetty` (mode 0600) |
 | `postfix_network_listening_disabled`<br><sub>Disable Postfix Network Listening</sub> | medium | 1.4.2, 1.4 | line in `/etc/postfix/main.cf`: `inet_interfaces=loopback-only` |
 | `securetty_root_login_console_only`<br><sub>Restrict Virtual Console Root Logins</sub> | medium | 8.6.1, 8.6 | edit `/etc/securetty` |

@@ -771,6 +771,12 @@ def m_lineinfile(r):
     if not m:
         return None
     line, path = m.group(1), m.group(2)
+    # sshd drop-ins are invisible to the SLE15 sshd OVAL (it reads only the main
+    # /etc/ssh/sshd_config). Route sshd-related lineinfile rules (e.g.
+    # disable_host_auth -> HostbasedAuthentication) to the main file on traditional
+    # layouts, mirroring m_sshd.
+    if path.startswith("/etc/ssh/sshd_config.d/") and not sshd_uses_dropin():
+        path = SSHD_MAIN
     # Resolve any shell variable references in the captured line.
     if "$" in line:
         line = shell_resolve(line, bash)
