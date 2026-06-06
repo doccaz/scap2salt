@@ -105,7 +105,6 @@ OVAL check on the targeted platforms:
 
 | Rule(s) | CaC value | scap2salt value | Why |
 |---|---|---|---|
-| `sshd_set_keepalive` (and, by dependency, `sshd_set_idle_timeout`) | `ClientAliveCountMax 0` | `ClientAliveCountMax 1` | On **OpenSSH ≥ 8.2** (SLE 16 ships OpenSSH 10) a `ClientAliveCountMax` of `0` *disables* the idle timeout entirely, so both rules fail their checks. A value of `1` keeps the timeout functional (session drops after `ClientAliveInterval × 1`). The override lives in `SSHD_KEEPALIVE_OVERRIDE` in `scap2salt.py`. |
 | `file_permissions_etc_shadow`, `file_permissions_backup_etc_shadow` | relative `chmod` (max `0640`) | `0000` | On SLE the OVAL requires `/etc/shadow` and `/etc/shadow-` to be `0000` (root reads them via capabilities). CaC's generic relative `chmod u-xs,g-xws,o-xwrt` only reaches `0640`, which fails the check **and** would loosen the secure `0000` default. Forced to `0000` via `_PERMS_ZERO_MODE` in `scap2salt.py`. |
 
 scap2salt translates CaC's relative symbolic `chmod` specs (e.g. `u-xs,g-xws,o-xwrt`)

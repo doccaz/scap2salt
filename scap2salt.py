@@ -131,7 +131,8 @@ def load_benchmark(path):
 
 
 def resolve_profile(bench, profile_id):
-    """Return the set of selected rule idrefs for a profile (resolving 'extends')."""
+    """Return (pid, selected rule idrefs, {value_id: selector}) for a profile,
+    resolving 'extends' for both <select> and <refine-value>."""
     profiles = {p.get("id"): p for p in bench if ln(p) == "Profile"}
     # Allow short id or fully-qualified id.
     pid = profile_id
@@ -143,25 +144,38 @@ def resolve_profile(bench, profile_id):
         pid = matches[0]
 
     selected = set()
+    refinements = {}
 
     def apply(p):
         parent = p.get("extends")
         if parent and parent in profiles:
             apply(profiles[parent])
         for sel in p:
-            if ln(sel) == "select":
+            tag = ln(sel)
+            if tag == "select":
                 ref = sel.get("idref")
                 if sel.get("selected", "false") == "true":
                     selected.add(ref)
                 else:
                     selected.discard(ref)
+            elif tag == "refine-value":
+                ref, selector = sel.get("idref"), sel.get("selector")
+                if ref and selector:
+                    refinements[ref] = selector
 
     apply(profiles[pid])
-    return pid, selected
+    return pid, selected, refinements
 
 
-def load_values(bench):
-    """Return a dict of XCCDF Value id -> default value string (for <sub> resolution)."""
+def load_values(bench, refinements=None):
+    """Return a dict of XCCDF Value id -> resolved value string (for <sub>).
+
+    When the chosen profile refines a value (`<refine-value selector="...">`),
+    use the matching `<value selector="...">`; otherwise fall back to the
+    no-selector default. Without this, profile-tuned values (e.g. pci-dss-4 sets
+    var_password_pam_minlen=12, var_auditd_name_format=fqd) silently use the
+    benchmark default instead, producing states the profile's own checks reject."""
+    refinements = refinements or {}
     out = {}
     for el in bench.iter():
         if ln(el) != "Value":
@@ -169,10 +183,19 @@ def load_values(bench):
         vid = el.get("id")
         if not vid:
             continue
+        wanted = refinements.get(vid)
+        default = refined = None
         for child in el:
-            if ln(child) == "value" and not child.get("selector") and child.text:
-                out[vid] = child.text.strip()
-                break
+            if ln(child) != "value" or child.text is None:
+                continue
+            csel = child.get("selector")
+            if wanted is not None and csel == wanted:
+                refined = child.text.strip()
+            elif not csel:
+                default = child.text.strip()
+        chosen = refined if refined is not None else default
+        if chosen is not None:
+            out[vid] = chosen
     return out
 
 
@@ -569,12 +592,6 @@ SSHD_TABLE = {
 # sshd rules that are not a single config directive (skip — handled elsewhere / N/A).
 SSHD_SKIP = {"sshd_use_strong_rng", "sshd_install_libpam_ssh"}
 SSHD_DROPIN = "/etc/ssh/sshd_config.d/00-pci-hardening.conf"
-# Deliberate deviation from CaC (documented in README "Deviations from upstream
-# CaC"): CaC ships ClientAliveCountMax=0, but on OpenSSH >= 8.2 a value of 0
-# DISABLES the idle timeout entirely, so both sshd_set_keepalive and
-# sshd_set_idle_timeout fail their own checks on modern systems. Force a
-# functional non-zero value.
-SSHD_KEEPALIVE_OVERRIDE = "1"
 
 
 @mapper
@@ -609,9 +626,6 @@ def m_sshd(r):
             value = fo.split(None, 1)[1]
         else:
             return None  # unresolved value -> don't write a broken literal
-    # Override CaC's ClientAliveCountMax=0 (breaks the timeout on OpenSSH >= 8.2).
-    if directive == "ClientAliveCountMax" and value.strip() == "0":
-        value = SSHD_KEEPALIVE_OVERRIDE
     return SaltState(
         f"sshd_{directive}", "file.replace",
         [("name", SSHD_DROPIN),
@@ -772,14 +786,17 @@ def m_audit(r):
     # Emit when there are syscalls OR a non-syscall filter (e.g. -F dir=... watch).
     if syscall or other:
         for arch in ("b32", "b64"):
+            # Match CaC's canonical field order exactly — the audit OVAL checks the
+            # rules.d file textually and is order-sensitive:
+            #   -a always,exit -F arch=ARCH -S SYSCALL(s) OTHER_FILTERS AUID -F key=KEY
             parts = [f"-a always,exit -F arch={arch}"]
+            parts += [f"-S {s}" for s in syscall.split()]
             if other:
                 parts.append(other)
-            parts += [f"-S {s}" for s in syscall.split()]
             if auid:
                 parts.append(auid)
             if key:
-                parts.append(f"-k {key}")
+                parts.append(f"-F key={key}")
             lines.append(" ".join(parts))
     if not lines:
         return None
@@ -793,7 +810,7 @@ def m_audit(r):
         if "arch=b64" in line and any(f"-S {sc}" in line for sc in _B64_DROPPED):
             for sc in _B64_DROPPED:
                 line = re.sub(rf'\s*-S\s+{re.escape(sc)}\b', '', line).strip()
-            if re.fullmatch(r'-a always,exit -F arch=b64(\s+-k \S+)?', line):
+            if re.fullmatch(r'-a always,exit -F arch=b64(\s+-F key=\S+)?', line):
                 continue  # nothing left but the action header — drop entirely
         cleaned.append(line)
     lines = cleaned
@@ -2257,8 +2274,8 @@ def main():
 
     ds = acquire_datastream(args.target, args.datastream, args.cache)
     bench = load_benchmark(ds)
-    XCCDF_VALUES.update(load_values(bench))
-    profile_id, selected = resolve_profile(bench, args.profile)
+    profile_id, selected, refinements = resolve_profile(bench, args.profile)
+    XCCDF_VALUES.update(load_values(bench, refinements))
     rules = index_rules(bench)
     print(f"[*] Profile {profile_id}: {len(selected)} selected rules")
 

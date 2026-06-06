@@ -1,6 +1,6 @@
 # Rules with no remediation — xccdf_org.ssgproject.content_profile_pci-dss-4
 
-Generated 2026-06-05T21:10:05+00:00 from `ssg-sle15-ds.xml`.
+Generated 2026-06-06T04:06:53+00:00 from `ssg-sle15-ds.xml`.
 
 18 selected rule(s) ship **no `<fix>` of any kind** in the SSG (no shell, no Ansible). These are detective-only — there is nothing to automate. They require manual or site-specific remediation and are **not** counted against native coverage.
 
