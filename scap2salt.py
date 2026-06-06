@@ -2205,9 +2205,12 @@ def emit_formula(outdir, meta, used_cats, mac, cat_pci=None):
         form += entry
     write(os.path.join(fdir, "form.yml"), "\n".join(form) + "\n")
 
-    metadata = ("name: PCI-DSS v4 Hardening\n"
+    # Distinct display name per formula so multiple OS formulas are
+    # distinguishable in the MLM Formulas list (which lists by this name).
+    os_label = (CONFIG.get("target") or "").upper().replace("SLE", "SLE ") or "SUSE"
+    metadata = (f"name: PCI-DSS v4 Hardening ({os_label} / {mac_label})\n"
                 f'description: "PCI-DSS v4 hardening generated from {meta["prof"]} '
-                f'(MAC: {mac_label}; MAC category auto-detects LSM at runtime)"\n'
+                f'for {os_label} (MAC: {mac_label}). Formula/pillar namespace: {fname}."\n'
                 "group: Security & Compliance\n"
                 "after: []\n")
     write(os.path.join(fdir, "metadata.yml"), metadata)

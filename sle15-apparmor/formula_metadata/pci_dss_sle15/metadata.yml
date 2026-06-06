@@ -1,4 +1,4 @@
-name: PCI-DSS v4 Hardening
-description: "PCI-DSS v4 hardening generated from xccdf_org.ssgproject.content_profile_pci-dss-4 (MAC: AppArmor; MAC category auto-detects LSM at runtime)"
+name: PCI-DSS v4 Hardening (SLE 15 / AppArmor)
+description: "PCI-DSS v4 hardening generated from xccdf_org.ssgproject.content_profile_pci-dss-4 for SLE 15 (MAC: AppArmor). Formula/pillar namespace: pci_dss_sle15."
 group: Security & Compliance
 after: []
