@@ -1,8 +1,8 @@
 # Unmapped rules — xccdf_org.ssgproject.content_profile_pci-dss-4
 
-Generated 2026-06-06T14:06:47+00:00 from `ssg-sle16-ds.xml`.
+Generated 2026-06-06T14:19:45+00:00 from `ssg-sle16-ds.xml`.
 
-38 selected rule(s) have **no native Salt handler** and were skipped (native-only mode). Add a mapper in `scap2salt.py` or handle these via a separate reviewed state.
+37 selected rule(s) have **no native Salt handler** and were skipped (native-only mode). Add a mapper in `scap2salt.py` or handle these via a separate reviewed state.
 
 ## accounts* (10)
 - `accounts_no_uid_except_zero` — Verify Only Root Has UID 0 (PCI Req-8.5, 8.2.1, 8.2; sev high)
@@ -54,9 +54,6 @@ Generated 2026-06-06T14:06:47+00:00 from `ssg-sle16-ds.xml`.
 - `no_empty_passwords` — Prevent Login to Accounts With Empty Password (PCI Req-8.2.3, 8.3.1, 8.3; sev high)
 - `no_empty_passwords_etc_shadow` — Ensure There Are No Accounts With Blank or Null Passwords (PCI 2.2.2, 2.2; sev high)
 - `no_shelllogin_for_systemaccounts` — Ensure that System Accounts Do Not Run a Shell Upon Login (PCI 8.2.2, 8.2; sev medium)
-
-## permissions* (1)
-- `permissions_local_var_log` — Verify permissions of log files (PCI 10.3.1, 10.3; sev medium)
 
 ## rpm* (1)
 - `rpm_verify_hashes` — Verify File Hashes with RPM (PCI Req-11.5, 11.5.2; sev high)

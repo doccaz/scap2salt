@@ -578,6 +578,25 @@ def m_file_perms(r):
 
 
 @mapper
+def m_var_log_perms(r):
+    """permissions_local_var_log: clear exec/setuid/setgid/group-write/other bits
+    from files under /var/log. CaC uses a relative `find ... -exec chmod` sweep
+    over the tree (no -maxdepth 0), which has no declarative Salt primitive, so
+    emit a guarded operational cmd.run mirroring it (idempotent via onlyif)."""
+    if r.short != "permissions_local_var_log":
+        return None
+    find_sel = "find /var/log/ -perm /u+xs,g+xws,o+xwrt -type f"
+    st = SaltState(
+        "permissions_local_var_log", "cmd.run",
+        [("name", f"{find_sel} -exec chmod u-xs,g-xws,o-xwrt {{}} +"),
+         ("onlyif", f'test -n "$({find_sel} -print -quit 2>/dev/null)"')],
+        "permissions", r,
+    )
+    st.operational = True
+    return st
+
+
+@mapper
 def m_kmod(r):
     m = re.match(r"^kernel_module_(.+)_disabled$", r.short)
     if not m:
