@@ -2665,8 +2665,8 @@ def main():
                          "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.13",
-                    help="Version for the formula RPM (default: 1.0.0)")
+    ap.add_argument("--pkg-version", default="1.0.14",
+                    help="Version for the formula RPM (default: 1.0.14)")
     args = ap.parse_args()
 
     CONFIG["target"] = args.target
