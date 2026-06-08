@@ -10,7 +10,7 @@ Given an SSG datastream and a compliance profile (default: PCI-DSS v4), scap2sal
 out/srv/
 ├── salt/
 │   ├── top.sls                    # grain-filtered state entry point
-│   └── pci_dss/
+│   └── <formula>/                 # --formula-name (default pci_dss; e.g. PCI_DSS_v4_SLE16)
 │       ├── init.sls               # includes all active category files
 │       ├── sysctl.sls             # kernel parameters
 │       ├── packages.sls           # package install / removal
@@ -40,13 +40,13 @@ out/srv/
 │           └── oscap_remediate.sh # independent oscap remediation (cross-check)
 ├── pillar/
 │   ├── top.sls
-│   └── pci_dss.sls                # per-category boolean toggles
-└── formula_metadata/pci_dss/
+│   └── <formula>.sls              # per-category boolean toggles
+└── formula_metadata/<formula>/
     ├── form.yml                   # MLM/Uyuni Web UI checkboxes
     └── metadata.yml
 ```
 
-Every state file is wrapped in a Jinja guard so any category can be disabled by setting `pci_dss:<category>: False` in the pillar (or toggling the checkbox in the MLM Formulas tab).
+Every state file is wrapped in a Jinja guard so any category can be disabled by setting `<formula>:<category>: False` in the pillar (or toggling the checkbox in the MLM Formulas tab) — where `<formula>` is the `--formula-name` (default `pci_dss`).
 
 ## Design principles
 
@@ -268,40 +268,56 @@ Values for `sysctl`, `sshd`, `kmod`, and `lineinfile` states are extracted direc
 
 ## Deploying on SUSE Multi-Linux Manager
 
-The recommended path is the **formula RPM** — the way SUSE ships its own formulas. It's a single `zypper install` on the MLM/Uyuni server and the formula appears in the Web UI automatically.
+The recommended path is the **formula RPM** — the way SUSE ships its own formulas — and the formula then appears in the Web UI automatically.
+
+### Per-OS formula names
+
+A mixed SLE 15 + SLE 16 fleet runs **one formula per OS** (different MAC framework, package names, and rule selection), assigned per system-group. Use `--formula-name` to give each a distinct, descriptive name — MLM/Uyuni humanises the formula directory for the Formulas list:
+
+```bash
+./scap2salt.py --target sle15 --formula-name PCI_DSS_v4_SLE15 --package   # -> "PCI DSS V4 SLE15"
+./scap2salt.py --target sle16 --formula-name PCI_DSS_v4_SLE16 --package   # -> "PCI DSS V4 SLE16"
+```
+
+`--formula-name` drives the state dir, pillar namespace, form top-key, the in-form doc link, and the RPM name. (Without it the formula is named `pci_dss`.) The committed example trees use these names (`sle15-apparmor/salt/PCI_DSS_v4_SLE15/`, `sle16-selinux/salt/PCI_DSS_v4_SLE16/`).
 
 ### Recommended: formula RPM
 
+`out/package/` contains the `.rpm`, plus the `.spec`, a source tarball, a `build.sh` (to rebuild where `rpmbuild` isn't present), and a `README.md`.
+
+The RPM payload installs to `/usr/share/salt-formulas/{metadata,states}/<formula>/`, but the MLM/Uyuni Salt master only reads `/srv/salt` + `/srv/formula_metadata`, which on a **containerised** server are podman volumes under `/var/lib/containers/storage/volumes/srv-{salt,formulametadata}/_data`. The package therefore also copies the formula into those live volumes:
+
+**Containerised MLM on SL Micro (read-only / transactional root):**
+
 ```bash
-# Build the tree and the RPM in one go
-./scap2salt.py --package          # -> out/package/pci-dss-hardening-formula-<ver>.noarch.rpm
+sudo transactional-update pkg install --allow-unsigned-rpm \
+     ./PCI_DSS_v4_SLE16-hardening-formula-<ver>.noarch.rpm
+sudo reboot      # required to activate any transactional install
 ```
 
-`out/package/` then contains the `.rpm`, plus the `.spec`, a source tarball, a `build.sh` (to rebuild where `rpmbuild` isn't present), and a `README.md`. On the MLM server:
+Because `%post` runs in the transactional-update chroot — where the container storage is *shadowed* and not writable — the deploy is done on first boot by the bundled `deploy-<formula>.service` oneshot (vendor-enabled via a shipped `multi-user.target.wants` symlink). To deploy **without** waiting for the reboot, run the helper directly: `sudo /usr/libexec/deploy-<formula>.sh`.
 
-```bash
-sudo zypper install ./pci-dss-hardening-formula-<ver>.noarch.rpm
-```
+**Containerised MLM on a writable root, or a traditional server:** `sudo zypper install --allow-unsigned-rpm ./<rpm>` — there `%post` copies to the live volumes (or `/usr/share/salt-formulas` is in `file_roots`) immediately, no reboot needed.
 
-The files install to `/usr/share/salt-formulas/{metadata,states}/pci_dss/` — both already on the MLM server's Salt file roots, so no extra configuration is needed. Then, in the Web UI:
+Then, in the Web UI:
 
 1. Go to a **system** or **system group** → **Formulas**, tick **PCI-DSS v4 Hardening**, Save.
-2. Open the new **Pci Dss** sub-tab, toggle categories as desired, Save (this writes the `pci_dss:` pillar the states read).
+2. Open the new **PCI DSS V4 SLE16** (or **…SLE15**) sub-tab, toggle categories as desired, Save (this writes the `PCI_DSS_v4_SLE16:` pillar the states read).
 3. Apply the highstate. Use `_verify/oscap_scan.sh` for an independent read-only oscap check.
 
 In the formula model MLM generates the highstate and feeds the pillar from the form, so the RPM ships only the **states + metadata** (no `top.sls`/pillar).
 
 ### Alternative: manual state tree (no RPM)
 
-For the classic "apply against a grain" model:
+For the classic "apply against a grain" model (using the SLE 16 names as the example):
 
-1. Copy `out/srv/salt/pci_dss/` and `out/srv/salt/top.sls` to `/srv/salt/` on the MLM server, and `out/srv/pillar/` contents to `/srv/pillar/`.
+1. Copy `out/srv/salt/PCI_DSS_v4_SLE16/` and `out/srv/salt/top.sls` to `/srv/salt/` on the MLM server, and `out/srv/pillar/` contents to `/srv/pillar/`. On a containerised server, copy straight into the podman volumes (`/var/lib/containers/storage/volumes/srv-salt/_data/`, …`srv-pillar/_data/`).
 2. Tag in-scope clients: `salt '<minion>' grains.setval pci_scope true`
-3. Dry run: `out/srv/salt/pci_dss/_verify/salt_verify.sh`
-4. Apply: `salt -C 'G@pci_scope:true' state.apply pci_dss`
-5. Verify: `_verify/oscap_scan.sh` — produces an HTML report at `/var/log/pci_dss-scan/report.html`
+3. Dry run: `out/srv/salt/PCI_DSS_v4_SLE16/_verify/salt_verify.sh`
+4. Apply: `salt -C 'G@pci_scope:true' state.apply PCI_DSS_v4_SLE16`
+5. Verify: `_verify/oscap_scan.sh` — produces an HTML report at `/var/log/PCI_DSS_v4_SLE16-scan/report.html`
 
-The formula metadata is also written to `out/srv/formula_metadata/pci_dss/` for manual placement under `/srv/formula_metadata/` if you prefer not to use the RPM.
+The formula metadata is also written to `out/srv/formula_metadata/PCI_DSS_v4_SLE16/` for manual placement under `/srv/formula_metadata/` if you prefer not to use the RPM.
 
 ## Notes on targets and profiles
 

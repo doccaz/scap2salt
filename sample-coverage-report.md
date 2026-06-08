@@ -3,11 +3,11 @@
 - Datastream: `ssg-sle15-ds.xml`
 - Profile: `xccdf_org.ssgproject.content_profile_pci-dss-4`
 - MAC framework: `apparmor`
-- Generated: 2026-06-03T02:58:50+00:00
+- Generated: 2026-06-08T13:29:41+00:00
 
 **Selected:** 262  |  **Remediable:** 238  |  **No remediation:** 18  |  **N/A (apparmor):** 6
 
-**Native coverage: 206/238 remediable (86%)** — of which 13 guarded operational state(s).
+**Native coverage: 209/238 remediable (87%)** — of which 18 guarded operational state(s).
 
 _Denominator excludes N/A rules and rules the SSG ships no remediation for._
 
@@ -17,25 +17,29 @@ _Denominator excludes N/A rules and rules the SSG ships no remediation for._
 |---|---|
 | Kernel parameters (sysctl) | 12 |
 | Package install / removal | 22 |
+| Package signatures & verification (RPM/GPG) | 5 |
 | Service enable / disable | 8 |
-| File permissions & ownership | 53 |
+| File permissions & ownership | 52 |
 | Disabled kernel modules | 3 |
 | SSH server hardening | 17 |
-| Config-file settings (login.defs, securetty, etc.) | 13 |
+| Config-file settings (login.defs, securetty…) | 12 |
+| Invasive auth hardening: password aging + sudo re-auth (opt-in) | 4 |
 | PAM module arguments (pwquality, pam_unix, pam_wheel) | 6 |
-| sudo Defaults (sudoers.d drop-ins) | 3 |
-| Audit (auditd rules + auditd.conf) | 49 |
+| Sudo defaults (sudoers.d drop-ins) | 3 |
+| Audit rules & auditd configuration | 49 |
 | GNOME desktop (dconf) policy | 7 |
-| systemd core dump policy | 2 |
+| Systemd core dump policy | 2 |
 | GRUB kernel command-line arguments | 2 |
 | Firewall (iptables loopback rules) | 2 |
 | Resource limits (security/limits.d) | 1 |
-| File integrity (AIDE) | 2 |
-| Package signatures & verification (RPM/GPG) | 4 |
+| File integrity monitoring (AIDE) | 2 |
 
-## Guarded operational states (13)
+## Guarded operational states (18)
 _Imperative remediations (no declarative Salt primitive); idempotent via creates/onlyif/unless._
 
+- `accounts_password_set_max_life_existing` (8.3.9, 8.3)
+- `accounts_password_set_warn_age_existing` (8.3.9, 8.3)
+- `accounts_set_post_pw_existing` (Req-8.1.4, 8.2.6, 8.2)
 - `aide_build_database` (Req-11.5, 11.5.2)
 - `aide_periodic_checking_systemd_timer` (Req-11.5, 11.5.2)
 - `audit_rules_enable_syscall_auditing` (CM-6(b), CM-6.1(iv), SRG-OS-000480-GPOS-00227, SLES-15-030820, SLES-15-750450450, SV-234981r991589_rule)
@@ -45,21 +49,20 @@ _Imperative remediations (no declarative Salt primitive); idempotent via creates
 - `cracklib_accounts_password_pam_retry` (Req-8.1.6, Req-8.1.7, 8.3.4, 8.3)
 - `ensure_gpgcheck_never_disabled` (Req-6.2, 6.3.3, 6.3)
 - `ensure_suse_gpgkey_installed` (Req-6.2, 6.3.3, 6.3)
+- `permissions_local_var_log` (10.3.1, 10.3)
 - `rpm_verify_ownership` (Req-11.5, 11.5.2)
 - `rpm_verify_permissions` (Req-11.5, 11.5.2)
 - `set_password_hashing_algorithm_commonauth` (Req-8.2.1, 8.3.2, 8.3)
+- `sudo_require_authentication` (2.2.6, 2.2)
 - `use_pam_wheel_group_for_su` (2.2.6, 2.2)
 
-## Unmapped (32)
+## Unmapped (29)
 _No native handler — add a mapper or handle via a reviewed state._
 
-### accounts_* (6)
+### accounts_* (3)
 - `accounts_no_uid_except_zero` — Verify Only Root Has UID 0 (PCI Req-8.5, 8.2.1, 8.2; sev high)
-- `accounts_password_set_max_life_existing` — Set Existing Passwords Maximum Age (PCI 8.3.9, 8.3; sev medium)
-- `accounts_password_set_warn_age_existing` — Set Existing Passwords Warning Age (PCI 8.3.9, 8.3; sev medium)
 - `accounts_passwords_pam_tally2` — Set Deny For Failed Password Attempts (PCI Req-8.1.6, 8.3.4, 8.3; sev medium)
 - `accounts_passwords_pam_tally2_unlock_time` — Set Lockout Time for Failed Password Attempts using pam_tally2 (PCI Req-8.1.7, 8.3.4, 8.3; sev medium)
-- `accounts_set_post_pw_existing` — Set existing passwords a period of inactivity before they been locked (PCI Req-8.1.4, 8.2.6, 8.2; sev medium)
 
 ### configure_* (2)
 - `configure_crypto_policy` — Configure System Cryptography Policy (PCI 2.2.7, 2.2; sev high)
@@ -82,9 +85,11 @@ _No native handler — add a mapper or handle via a reviewed state._
 - `ensure_pam_wheel_group_empty` — Ensure the Group Used by pam_wheel.so Module Exists on System and is Empty (PCI 2.2.6, 2.2; sev medium)
 - `ensure_shadow_group_empty` — Ensure shadow Group is Empty (PCI Req-8.2.1, 8.3.2, 8.3; sev medium)
 
-### file_* (3)
+### file_* (5)
 - `file_ownership_var_log_audit` — System Audit Logs Must Be Owned By Root (PCI Req-10.5.1, 10.3.2, 10.3; sev medium)
 - `file_permissions_sshd_private_key` — Verify Permissions on SSH Server Private *_key Key Files (PCI Req-2.2.4, 2.2.6, 2.2; sev medium)
+- `file_permissions_sshd_pub_key` — Verify Permissions on SSH Server Public *.pub Key Files (PCI Req-2.2.4, 2.2.6, 2.2; sev medium)
+- `file_permissions_unauthorized_world_writable` — Ensure No World-Writable Files Exist (PCI 2.2.6, 2.2; sev medium)
 - `file_permissions_var_log_audit` — System Audit Logs Must Have Mode 0640 or Less Permissive (PCI Req-10.5, 10.3.1, 10.3; sev medium)
 
 ### gnome_* (1)
@@ -97,9 +102,6 @@ _No native handler — add a mapper or handle via a reviewed state._
 - `no_empty_passwords` — Prevent Login to Accounts With Empty Password (PCI Req-8.2.3, 8.3.1, 8.3; sev high)
 - `no_empty_passwords_etc_shadow` — Ensure There Are No Accounts With Blank or Null Passwords (PCI 2.2.2, 2.2; sev high)
 - `no_shelllogin_for_systemaccounts` — Ensure that System Accounts Do Not Run a Shell Upon Login (PCI 8.2.2, 8.2; sev medium)
-
-### permissions_* (1)
-- `permissions_local_var_log` — Verify permissions of log files (PCI 10.3.1, 10.3; sev medium)
 
 ### rpm_* (1)
 - `rpm_verify_hashes` — Verify File Hashes with RPM (PCI Req-11.5, 11.5.2; sev high)
@@ -114,9 +116,6 @@ _No native handler — add a mapper or handle via a reviewed state._
 
 ### set_* (1)
 - `set_password_hashing_algorithm_systemauth` — Set PAM Password Hashing Algorithm - system-auth (PCI Req-8.2.1, 8.3.2, 8.3; sev medium)
-
-### sudo_* (1)
-- `sudo_require_authentication` — Ensure Users Re-Authenticate for Privilege Escalation - sudo (PCI 2.2.6, 2.2; sev medium)
 
 ### wireless_* (1)
 - `wireless_disable_interfaces` — Deactivate Wireless Network Interfaces (PCI Req-1.3.3, 1.3.3, 1.3; sev medium)

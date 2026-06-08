@@ -157,19 +157,34 @@ Beyond the standard `-w`/`-a` reconstruction, `m_audit` handles three extras:
 `emit_package()` repackages the already-generated tree into the canonical SUSE
 formula layout and builds an RPM:
 
-- States → `/usr/share/salt-formulas/states/pci_dss/`, metadata (`form.yml`,
-  `metadata.yml`) → `/usr/share/salt-formulas/metadata/pci_dss/`. Both are on the
-  MLM/Uyuni server's Salt file roots, so the formula appears in the Formulas tab
-  with no extra config.
+- States → `/usr/share/salt-formulas/states/<formula>/`, metadata (`form.yml`,
+  `metadata.yml`) → `/usr/share/salt-formulas/metadata/<formula>/`.
+- **Containerised-MLM deploy (the important bit).** The Uyuni Salt master only
+  reads `/srv/salt` + `/srv/formula_metadata`, which on a containerised server are
+  **podman volumes** under `/var/lib/containers/storage/volumes/srv-{salt,formulametadata}/_data`
+  — *not* the host's `/usr/share`. So the RPM must copy the formula into those
+  live volumes. It ships a helper (`/usr/libexec/deploy-<formula>.sh`) that
+  resolves the volume mountpoints (`podman volume inspect`, with the well-known
+  path as fallback) and `cp -a`s the formula in. `%post` runs it directly — which
+  works on a writable-root host — **but on SL Micro (read-only/transactional
+  root) `%post` runs inside the transactional-update chroot, where
+  `/var/lib/containers` is a *shadowed snapshot copy* and the write never reaches
+  the live container.** So deployment is deferred to first boot via a
+  `deploy-<formula>.service` oneshot, **vendor-enabled by a packaged
+  `…/multi-user.target.wants/` symlink in `/usr`** (no `systemctl enable` in
+  `%post` — that is unreliable in the chroot). Install on SL Micro with
+  `transactional-update pkg install --allow-unsigned-rpm <rpm>` then reboot (or
+  run the helper manually to skip the wait). `%preun` (final removal) stops the
+  oneshot and removes the volume copies.
 - The **formula model** deliberately omits `top.sls` and the pillar tree — MLM
-  generates the highstate and feeds the `pci_dss:` pillar from the form. The
-  category guards (`pillar.get('pci_dss', …)`) already match what the form writes.
+  generates the highstate and feeds the `<formula>:` pillar from the form. The
+  category guards (`pillar.get('<formula>', …)`) already match what the form writes.
 - `out/package/` holds the `.spec`, a `%{name}-%{version}.tar.gz` source tarball,
   `build.sh` (rebuild where `rpmbuild` is absent), a deploy `README.md`, and the
   built `.rpm`. `_build_rpm()` shells out to `rpmbuild` in a private `_topdir`; if
   `rpmbuild` is missing or fails it leaves the spec+tarball and prints how to
-  finish the build. Package name is `pci-dss-hardening-formula`; the formula dir
-  (and pillar namespace) stays `pci_dss`.
+  finish the build. Package name is `pci-dss-hardening-formula` for the default
+  `pci_dss` formula, else `<formula>-hardening-formula` (so per-OS RPMs coexist).
 - `out/package/` lives under the git-ignored `out/`; distribute the `.rpm` via a
   GitHub Release or an MLM software channel, not by committing it.
 
