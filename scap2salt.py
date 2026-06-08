@@ -389,6 +389,12 @@ def m_sysctl(r):
              ("onlyif", ["systemctl is-active --quiet firewalld",
                          "firewall-cmd --query-forward"])],
         ))
+    # NOTE: fs.suid_dumpable's *static* OVAL also fails because systemd ships
+    # 'fs.suid_dumpable=2' in /usr/lib/sysctl.d/50-coredump.conf. We deliberately
+    # do NOT comment that out: our /etc/sysctl.d/ drop-in already wins at runtime
+    # (value 0), and editing a packaged file would trip rpm_verify_hashes
+    # (package-integrity). The runtime is hardened; the static check is left to
+    # fail by design. See NO_REMEDIATION.md / coverage notes.
     return st
 
 
@@ -428,8 +434,16 @@ def m_service(r):
     if action == "enabled":
         return SaltState(f"svc_on_{svc}", "service.running",
                          [("name", svc), ("enable", True)], "services", r)
-    return SaltState(f"svc_off_{svc}", "service.dead",
-                     [("name", svc), ("enable", False)], "services", r)
+    st = SaltState(f"svc_off_{svc}", "service.dead",
+                   [("name", svc), ("enable", False)], "services", r)
+    # The service_*_disabled OVAL is satisfied only when the package is absent OR
+    # the unit's LoadState is 'masked' (or not-found) AND it is inactive — merely
+    # disabling leaves LoadState=loaded and fails the check. Mask it too so the
+    # unit cannot be started and the scan passes (CaC's fix masks as well).
+    st.extra_states.append((
+        f"svc_mask_{svc}", "service.masked", [("name", svc)],
+    ))
+    return st
 
 
 def _symbolic_mode_max(spec):

@@ -25,9 +25,9 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | Remediable (coverage denominator) | 238 | 230 |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **206/238 — 86%** | **194/230 — 84%** |
-| Guarded operational states | 13 | 8 |
-| Remediable rules still unmapped | 32 | 36 |
+| **Native coverage** | **209/238 — 87%** | **197/230 — 85%** |
+| Guarded operational states | 18 | 13 |
+| Remediable rules still unmapped | 29 | 33 |
 
 Regenerate with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`. Keep these numbers in sync with the README's "Current coverage" section when handlers change.
 

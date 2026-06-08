@@ -32,6 +32,7 @@ coupled to existing-user max-age, not just `/etc/login.defs`).
 |---|---|
 | `permissions_local_var_log` | ✅ guarded `find /var/log -exec chmod` sweep |
 | `account_disable_post_pw_expiration` | ✅ fixed `_resolve_formatted_output` separator → `/etc/default/useradd` now gets `INACTIVE=90` (was `INACTIVE 90`) |
+| `service_nftables_disabled` | ✅ now **masks** the unit (`service.masked` extra-state) — the OVAL requires `LoadState=masked`, not just disabled. Applies to every `service_*_disabled` rule. |
 
 ## 🟥 Won't-fix — not a formula gap
 
@@ -45,15 +46,21 @@ Host-role / framework conflicts:
 | Rule | Why |
 |---|---|
 | `selinux_confinement_of_daemons` | policy-level; covered by enforcing mode (`SKIPPED_NA`) |
-| `service_nftables_disabled` | firewalld's backend *is* nftables and other rules need firewalld |
 | `file_permissions_unauthorized_world_writable` | filesystem-wide sweep; no safe declarative form |
 | `sysctl_net_ipv4_ip_forward` | Docker/Podman/libvirt force `ip_forward=1` |
+| `sysctl_fs_suid_dumpable` | Runtime **is** hardened to `0` (our `/etc/sysctl.d` drop-in). The rule's *static* OVAL also greps `/usr/lib/sysctl.d/50-coredump.conf`, which systemd ships with `fs.suid_dumpable=2`. The only way to clear it is to comment out that vendor line — which trips `rpm_verify_hashes` (package integrity), a numerical wash. Decision: **leave the packaged file intact**; runtime hardening stands. |
+
+Password hashing — the effective control passes, the pam-file checks can't:
+
+| Rule | Why |
+|---|---|
+| `set_password_hashing_algorithm_commonauth` | We write the exact `auth sufficient pam_unix.so … sha512` line CaC's own fix produces (and `grep -P` matches the OVAL pattern), but **oscap 1.4.1's `textfilecontent54` probe never credits it on SUSE** — verified by brute-forcing every line form. Also a near-no-op (the *auth* stack doesn't hash). The real control — `set_password_hashing_algorithm_logindefs` (`/etc/login.defs ENCRYPT_METHOD SHA512`) — **passes**. |
+| `set_password_hashing_algorithm_systemauth` | Same oscap-probe limitation, plus its fix is RHEL/`authselect`-style and unmapped. The effective hashing control (logindefs, above) covers the intent and passes. |
 
 N/A or unsafe on SLE:
 
 | Rule | Why |
 |---|---|
-| `set_password_hashing_algorithm_systemauth` | `system-auth` doesn't exist on SLE (uses `common-auth`) |
 | `display_login_attempts` | needs `pam_lastlog2.so`, not shipped on SLE 16 |
 | `no_empty_passwords` | edits/locks existing blank-password accounts (host data) |
 | `ensure_pam_wheel_group_empty` | depends on current group membership |
@@ -62,7 +69,6 @@ N/A or unsafe on SLE:
 
 | Rule | Likely cause |
 |---|---|
-| `set_password_hashing_algorithm_commonauth` | guarded PAM `cmd.run`; verify it satisfies the OVAL |
 | `audit_rules_suid_privilege_function` | format now canonical; loaded-vs-file/immutability nuance or multi-condition OVAL |
 | `aide_periodic_checking_systemd_timer` | timer enabled; OVAL may want a specific unit name/schedule |
 | `audit_rules_login_events_faillock` | watch dir refined to `/var/run/faillock` but the companion `pam_faillock dir=` rule isn't selected → OVAL wants a watch on the *effective* dir |
