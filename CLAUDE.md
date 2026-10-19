@@ -25,9 +25,9 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | Remediable (coverage denominator) | 238 | 230 |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **209/238 — 87%** | **201/230 — 87%** |
-| Guarded operational states | 18 | 13 |
-| Remediable rules still unmapped | 29 | 29 |
+| **Native coverage** | **216/238 — 90%** | **210/230 — 91%** |
+| Guarded operational states | 23 | 18 |
+| Remediable rules still unmapped | 22 | 20 |
 
 Regenerate with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`. Keep these numbers in sync with the README's "Current coverage" section when handlers change.
 
@@ -116,6 +116,8 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_audit` | `audit_rules_*`, `audit_*`, + rules using the `rules.d` macro (e.g. `directory_access_var_log_audit`) | `audit` |
 | `m_auditd_conf` | `auditd_*` (auditd.conf / audisp plugin `key = value`) | `audit` |
 | `m_pam` | PAM module-arg rules using CaC's `VALUES/VALUE_NAMES/ARGS` macro (cracklib pwquality, `pam_unix` hashing, `pam_wheel`) | `pam` |
+| `m_faillock` | `accounts_passwords_pam_faillock_{deny,unlock_time}` (**usr-etc/SLE16+ only**: SLE 15's PAM 1.3.0 has no `pam_faillock.so`) — `faillock.conf` key + CaC's `pam_faillock` lines in `common-auth`/`common-account` | `pam` |
+| `m_account_hygiene` | `no_empty_passwords` (drop `nullok`), `ensure_shadow_group_empty`, `ensure_pam_wheel_group_empty`, `set_password_hashing_algorithm_systemauth` (`pam`); `no_empty_passwords_etc_shadow`, `accounts_no_uid_except_zero`, `no_shelllogin_for_systemaccounts` (opt-in `accounts`) | `pam` / `accounts` |
 | `m_pwquality` | SLE16-style `accounts_password_pam_*` that edit `/etc/security/pwquality.conf` (seeded from `/usr/lib/security/pwquality.conf`) | `pam` |
 | `m_sudoers` | `sudo_*` with an `echo "Defaults …" >>` fix (SLE16+: seeds `/etc/sudoers` from `/usr/etc/sudoers` and edits it in place; SLE15: `sudoers.d` drop-in) | `sudo` |
 | `m_coredump` | `coredump_*` (systemd `[Coredump]` key=value) | `coredump` |
@@ -288,7 +290,9 @@ This lets operators disable any category without editing state files.
 ## Known limitations
 
 - **SLE 16 rules that fail by design** (single source of truth: `BY_DESIGN_FAILURES` in `scap2salt.py`, rendered into the generated `README.md`, `coverage-report.md`, the MLM form help and the repo README; they can only be satisfied by editing packaged files, which would trip `rpm_verify_*` — the project chooses package integrity): `sysctl_fs_suid_dumpable` (needs `fs.suid_dumpable=2` commented out of `/usr/lib/sysctl.d/50-coredump.conf`) and `sshd_disable_x11_forwarding` (CaC >= 0.1.82 also wants `X11Forwarding yes` removed from the vendor `/usr/etc/ssh/sshd_config`). The runtime values are hardened regardless (our drop-ins win).
-- SLE 16 `accounts_passwords_pam_faillock_*` and the other PAM-stack rules are not mapped: they need `pam_faillock` lines in `common-auth` plus `/etc/security/faillock.conf`.
+- **`display_login_attempts` is not mapped** on either target: the upstream fix only edits `pam_lastlog2`, which SLE 15 and SLE 16 do not use (SLE 16 uses `pam_wtmpdb`), so the remediation is a no-op there and the rule cannot be satisfied.
+- **faillock on SLE 15:** the `accounts_passwords_pam_faillock_*` rules are not mapped for SLE 15 because PAM 1.3.0 ships no `pam_faillock.so`; inserting it into `common-auth` would break authentication.
+- **PAM `common-auth` shape:** CaC's non-authselect faillock fix turns the single `pam_unix.so` auth line into `sufficient` and brackets it with `pam_faillock` preauth/authfail/authsucc. The `commonauth` hashing state and the faillock state both normalise to that same line, so they converge in either order. A box that ran an older scap2salt may carry a second `auth sufficient pam_unix.so` line; remove it once (restore `common-auth-pc`) before applying.
 - Only the first matching mapper wins; there is no merging of multiple states for one rule.
 - OVAL checks are not parsed; the script relies entirely on XCCDF rule metadata and bash fix scripts for value extraction.
 - Bash fix extraction uses regex heuristics — unusual bash in a fix script may produce `None` and fall through to `UNMAPPED.md`.

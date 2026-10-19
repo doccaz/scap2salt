@@ -1151,9 +1151,14 @@ def m_pam(r):
     base = f"{ltype} {ctrl} pam_{mod}.so"
     # Build a faithful, idempotent shell remediation (no declarative PAM primitive
     # exists in core Salt): ensure the module line exists, then ensure each option.
+    # If the module already appears exactly once with another control, convert
+    # that line (as CaC's own later scripts do) instead of appending a duplicate;
+    # a second pam_unix.so line in common-auth breaks the pam_faillock OVAL.
     cmds = [f'f={pam_file}',
             f'grep -qE "^[[:space:]]*{ltype}[[:space:]]+{ctrl}[[:space:]]+pam_{mod}\\.so" "$f" '
-            f'|| echo "{base}" >> "$f"']
+            f'|| if [ "$(grep -cE "^[[:space:]]*{ltype}[[:space:]]+[^[:space:]]+[[:space:]]+pam_{mod}\\.so" "$f")" = 1 ]; '
+            f'then sed -ri --follow-symlinks "s/^([[:space:]]*{ltype}[[:space:]]+)[^[:space:]]+([[:space:]]+pam_{mod}\\.so)/\\1{ctrl}\\2/" "$f"; '
+            f'else echo "{base}" >> "$f"; fi']
     checks = []
     for nm, vl in opts:
         cmds.append(
@@ -1178,6 +1183,134 @@ def m_pam(r):
 @mapper
 def _m_pam(r):
     return m_pam(r)
+
+
+FAILLOCK_CONF = "/etc/security/faillock.conf"
+# CaC's non-authselect pam_faillock stack for common-auth/common-account (SLE has
+# no authselect). It also normalises the single pam_unix.so auth line to
+# "sufficient", exactly as CaC does, so the result is the same whichever of the
+# faillock / commonauth-hashing states runs first.
+_FAILLOCK_STACK = r"""a=/etc/pam.d/common-auth; c=/etc/pam.d/common-account
+grep -qE '^\s*auth\s+required\s+pam_faillock\.so\s+preauth' $a || sed -i --follow-symlinks '/^auth.*pam_unix\.so.*/i auth        required      pam_faillock.so preauth' $a
+grep -qE '^\s*auth\s+\[default=die\]\s+pam_faillock\.so\s+authfail' $a || sed -i --follow-symlinks '/^auth.*pam_unix\.so.*/a auth        [default=die]      pam_faillock.so authfail' $a
+grep -qE '^\s*auth\s+sufficient\s+pam_faillock\.so\s+authsucc' $a || sed -i --follow-symlinks '/^auth.*pam_faillock\.so.*authfail.*/a auth        sufficient      pam_faillock.so authsucc' $a
+grep -qE '^\s*account\s+required\s+pam_faillock\.so' $c || sed -i --follow-symlinks '/^account.*required.*pam_unix\.so.*/i account   required     pam_faillock.so' $c
+grep -qE '^\s*auth\s+sufficient\s+pam_unix\.so' $a || if [ "$(grep -cE '^\s*auth\s+\S+\s+pam_unix\.so' $a)" = 1 ]; then sed -i -E --follow-symlinks 's/^(\s*auth\s+)\S+(\s+pam_unix\.so)/\1sufficient\2/' $a; fi"""
+_FAILLOCK_UNLESS = (r"""a=/etc/pam.d/common-auth; grep -qE '^\s*auth\s+required\s+pam_faillock\.so\s+preauth' $a """
+                    r"""&& grep -qE '^\s*auth\s+\[default=die\]\s+pam_faillock\.so\s+authfail' $a """
+                    r"""&& grep -qE '^\s*auth\s+sufficient\s+pam_faillock\.so\s+authsucc' $a """
+                    r"""&& grep -qE '^\s*account\s+required\s+pam_faillock\.so' /etc/pam.d/common-account """
+                    r"""&& grep -qE '^\s*auth\s+sufficient\s+pam_unix\.so' $a""")
+
+
+@mapper
+def m_faillock(r):
+    """accounts_passwords_pam_faillock_{deny,unlock_time}: faillock.conf key plus
+    the pam_faillock lines in common-auth/common-account (usr-etc targets only:
+    SLE 15 ships PAM 1.3.0 without pam_faillock, so inserting it would break
+    authentication there)."""
+    m = re.match(r"^accounts_passwords_pam_faillock_(deny|unlock_time)$", r.short)
+    if not m or not sshd_uses_dropin():
+        return None
+    key = m.group(1)
+    vm = re.search(rf"^var_accounts_passwords_pam_faillock_{key}='([^']+)'", r.bash or "", re.M)
+    if not vm:
+        return None
+    val = vm.group(1)
+    seed = SaltState(
+        f"faillock_conf_seed_{key}", "cmd.run",
+        [("name", "cp -p /usr/etc/security/faillock.conf /etc/security/faillock.conf "
+                  "2>/dev/null || install -m 0644 /dev/null /etc/security/faillock.conf"),
+         ("creates", FAILLOCK_CONF)], "pam", r)
+    seed.extra_states.append((
+        f"faillock_{key}", "file.replace",
+        [("name", FAILLOCK_CONF), ("pattern", rf"^[ \t]*{key}[ \t]*=[^\n]*$"),
+         ("repl", f"{key} = {val}"), ("append_if_not_found", True), ("backup", False),
+         ("require", [f"cmd: faillock_conf_seed_{key}"])]))
+    if key == "deny":     # the PAM stack is shared; emit it once
+        seed.extra_states.append((
+            "faillock_pam_stack", "cmd.run",
+            [("name", _FAILLOCK_STACK),
+             ("onlyif", ["test -e /usr/lib64/security/pam_faillock.so",
+                         "! grep -qE 'success=[1-9].*pam_unix' /etc/pam.d/common-auth"]),
+             ("unless", _FAILLOCK_UNLESS),
+             ("require", ["file: faillock_deny"])]))
+    return seed
+
+
+@mapper
+def m_account_hygiene(r):
+    """Small account/PAM hygiene rules whose CaC fix is a short shell snippet:
+    each is emitted as an idempotent, guarded state mirroring that snippet."""
+    sh = r.short
+    bash = r.bash or ""
+    if sh == "ensure_shadow_group_empty":
+        return SaltState(
+            "shadow_group_empty", "file.replace",
+            [("name", "/etc/group"), ("pattern", r"^(shadow:[^:]*:[^:]*:)[^:]+$"),
+             ("repl", r"\g<1>"), ("backup", False)], "pam", r)
+    if sh == "no_empty_passwords":
+        # drop nullok from every pam_unix line (follows the common-* symlinks)
+        pat = r"pam_unix\.so.*nullok"
+        st = SaltState(
+            "pam_remove_nullok", "cmd.run",
+            [("name", f"grep -rlE '{pat}' /etc/pam.d/ | xargs -r sed --follow-symlinks -i 's/\\<nullok\\>//g'"),
+             ("onlyif", f"grep -rqE '{pat}' /etc/pam.d/")], "pam", r)
+        st.operational = True
+        return st
+    if sh == "no_empty_passwords_etc_shadow":
+        st = SaltState(
+            "lock_empty_password_accounts", "cmd.run",
+            [("name", "awk -F: '!$2 {print $1}' /etc/shadow | xargs -r -n1 passwd -l"),
+             ("onlyif", "awk -F: '!$2 {f=1} END {exit !f}' /etc/shadow")],
+            "accounts", r)   # opt-in: locking accounts can lock out agents
+        st.operational = True
+        return st
+    if sh == "accounts_no_uid_except_zero":
+        st = SaltState(
+            "lock_extra_uid0_accounts", "cmd.run",
+            [("name", "awk -F: '$3 == 0 && $1 != \"root\" {print $1}' /etc/passwd | xargs -r -n1 passwd -l"),
+             ("onlyif", "awk -F: '$3 == 0 && $1 != \"root\" {f=1} END {exit !f}' /etc/passwd")],
+            "accounts", r)
+        st.operational = True
+        return st
+    if sh == "no_shelllogin_for_systemaccounts":
+        sel = ('$3 < 1000 && $1 != "root" && $7 != "/sbin/shutdown" && $7 != "/sbin/halt" '
+               '&& $7 != "/bin/sync" && $7 != "/sbin/nologin"')
+        st = SaltState(
+            "system_accounts_nologin", "cmd.run",
+            [("name", "awk -F: '(" + sel + ") {print $1}' /etc/passwd | xargs -r -n1 usermod -s /sbin/nologin"),
+             ("onlyif", "awk -F: '(" + sel + ") {f=1} END {exit !f}' /etc/passwd")],
+            "accounts", r)
+        st.operational = True
+        return st
+    if sh == "ensure_pam_wheel_group_empty":
+        vm = re.search(r"^var_pam_wheel_group_for_su='([^']+)'", bash, re.M)
+        if not vm:
+            return None
+        grp = vm.group(1)
+        st = SaltState(f"pam_wheel_group_{grp}", "group.present", [("name", grp)], "pam", r)
+        st.extra_states.append((
+            f"pam_wheel_group_{grp}_empty", "cmd.run",
+            [("name", f"gpasswd -M '' {grp}"),
+             ("onlyif", f"getent group {grp} | awk -F: '$4 != \"\" {{f=1}} END {{exit !f}}'"),
+             ("require", [f"group: pam_wheel_group_{grp}"])]))
+        return st
+    if sh == "set_password_hashing_algorithm_systemauth":
+        vm = re.search(r"^var_password_hashing_algorithm_pam='([^']+)'", bash, re.M)
+        if not vm:
+            return None
+        algo = vm.group(1).split("|")[0]
+        f = "/etc/pam.d/common-password"
+        line = r"^\s*password\s+required\s+pam_unix\.so"
+        st = SaltState(
+            "pam_unix_password_hash", "cmd.run",
+            [("name", f"sed -i -E --follow-symlinks '/{line}/ s/$/ {algo}/' {f}"),
+             ("onlyif", f"grep -qE '{line}' {f}"),
+             ("unless", f"grep -qP '{line}\\s.*\\b{algo}\\b' {f}")], "pam", r)
+        st.operational = True
+        return st
+    return None
 
 
 @mapper
@@ -2098,7 +2231,9 @@ CAT_HELP = {
     "accounts": (
         "PCI-DSS §8.2, §8.3, §8.6.1 — DEFAULT OFF (opt-in). Invasive changes to "
         "EXISTING accounts/access: ages current passwords (passwd -x / chage "
-        "--warndays/--inactive) and removes NOPASSWD/!authenticate from sudoers. "
+        "--warndays/--inactive), removes NOPASSWD/!authenticate from sudoers, "
+        "locks accounts with an empty password or an extra UID 0, and sets a "
+        "nologin shell on system accounts. "
         "WARNING: this expires existing passwords (an expired account cannot be "
         "fixed with chage afterwards) and can lock out users or management agents "
         "— enable only after refreshing/excluding admin and service accounts."
@@ -2234,7 +2369,7 @@ CAT_SHORT = {
     "kernel_modules": "block unused kernel modules",
     "sshd": "harden sshd_config.d",
     "lineinfile": "login.defs / useradd / securetty / chrony",
-    "accounts": "OPT-IN: expire existing passwords + sudo re-auth",
+    "accounts": "OPT-IN: expire passwords, sudo re-auth, lock empty/UID0 accounts",
     "pam": "password complexity & hashing",
     "sudo": "sudoers.d Defaults (requiretty, env_reset)",
     "audit": "auditd rules (immutable -e 2; reboot to reload)",

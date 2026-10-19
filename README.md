@@ -68,9 +68,9 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | **Remediable** (coverage denominator) | **238** | **230** |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **209 / 238 — 87%** | **201 / 230 — 87%** |
-| Guarded operational states | 18 | 13 |
-| Remediable rules still unmapped | 29 | 29 |
+| **Native coverage** | **216 / 238 — 90%** | **210 / 230 — 91%** |
+| Guarded operational states | 23 | 18 |
+| Remediable rules still unmapped | 22 | 20 |
 
 Coverage by category:
 
@@ -84,7 +84,8 @@ Coverage by category:
 | Kernel parameters (sysctl) | 12 | 12 |
 | Service enable / disable | 8 | 8 |
 | GNOME desktop (dconf) policy | 7 | 7 |
-| PAM module arguments (pwquality, pam_unix, pam_wheel) | 6 | 6 |
+| PAM & account hygiene (pwquality, pam_unix, pam_wheel, faillock*, nullok) | 10 | 12 |
+| Opt-in account hardening (password aging, sudo re-auth, extra UID 0, empty passwords, system shells) | 7 | 7 |
 | Package signatures & verification (RPM/GPG) | 5 | 4 |
 | Disabled kernel modules | 3 | 3 |
 | sudo Defaults (sudoers.d drop-ins) | 3 | 3 |

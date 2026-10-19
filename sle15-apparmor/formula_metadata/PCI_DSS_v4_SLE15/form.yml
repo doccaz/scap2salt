@@ -57,8 +57,8 @@ PCI_DSS_v4_SLE15:
   accounts:
     $type: boolean
     $default: False
-    $name: "Invasive auth hardening: password aging + sudo re-auth (opt-in) [PCI 2.2, 8.1, 8.2, 8.3] — OPT-IN: expire existing passwords + sudo re-auth"
-    $help: "PCI-DSS §8.2, §8.3, §8.6.1 — DEFAULT OFF (opt-in). Invasive changes to EXISTING accounts/access: ages current passwords (passwd -x / chage --warndays/--inactive) and removes NOPASSWD/!authenticate from sudoers. WARNING: this expires existing passwords (an expired account cannot be fixed with chage afterwards) and can lock out users or management agents — enable only after refreshing/excluding admin and service accounts."
+    $name: "Invasive auth hardening: password aging + sudo re-auth (opt-in) [PCI 2.2, 8.1, 8.2, 8.3, 8.5] — OPT-IN: expire passwords, sudo re-auth, lock empty/UID0 accounts"
+    $help: "PCI-DSS §8.2, §8.3, §8.6.1 — DEFAULT OFF (opt-in). Invasive changes to EXISTING accounts/access: ages current passwords (passwd -x / chage --warndays/--inactive), removes NOPASSWD/!authenticate from sudoers, locks accounts with an empty password or an extra UID 0, and sets a nologin shell on system accounts. WARNING: this expires existing passwords (an expired account cannot be fixed with chage afterwards) and can lock out users or management agents — enable only after refreshing/excluding admin and service accounts."
   pam:
     $type: boolean
     $default: True

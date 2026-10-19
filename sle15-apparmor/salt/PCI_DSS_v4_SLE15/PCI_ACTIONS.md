@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-10-19T14:50:01+00:00 from `ssg-sle15-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: apparmor).
+Generated 2026-10-19T15:15:53+00:00 from `ssg-sle15-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: apparmor).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -179,9 +179,12 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 
 | Rule | Sev | PCI-DSS | Action |
 |---|---|---|---|
+| `accounts_no_uid_except_zero`<br><sub>Verify Only Root Has UID 0</sub> | high | Req-8.5, 8.2.1, 8.2 | operational cmd: `awk -F: '$3 == 0 && $1 != "root" {print $1}' /etc/passwd | xargs -r -n1 passwd -l` |
 | `accounts_password_set_max_life_existing`<br><sub>Set Existing Passwords Maximum Age</sub> | medium | 8.3.9, 8.3 | operational cmd: `awk -v var=90 -F: '(/^[^:]+:[^!*]/ && ($5 > var || $5 == "")) {print $1}' /etc/shadow |…` |
 | `accounts_password_set_warn_age_existing`<br><sub>Set Existing Passwords Warning Age</sub> | medium | 8.3.9, 8.3 | operational cmd: `awk -v var=7 -F: '(($6 < var || $6 == "") && $2 ~ /^\$/) {print $1}' /etc/shadow | whil…` |
 | `accounts_set_post_pw_existing`<br><sub>Set existing passwords a period of inactivity before they been locked</sub> | medium | Req-8.1.4, 8.2.6, 8.2 | operational cmd: `awk -v var=90 -F: '(($7 > var || $7 == "") && $2 ~ /^\$/) {print $1}' /etc/shadow | whi…` |
+| `no_empty_passwords_etc_shadow`<br><sub>Ensure There Are No Accounts With Blank or Null Passwords</sub> | high | 2.2.2, 2.2 | operational cmd: `awk -F: '!$2 {print $1}' /etc/shadow | xargs -r -n1 passwd -l` |
+| `no_shelllogin_for_systemaccounts`<br><sub>Ensure that System Accounts Do Not Run a Shell Upon Login</sub> | medium | 8.2.2, 8.2 | operational cmd: `awk -F: '($3 < 1000 && $1 != "root" && $7 != "/sbin/shutdown" && $7 != "/sbin/halt" && …` |
 | `sudo_require_authentication`<br><sub>Ensure Users Re-Authenticate for Privilege Escalation - sudo</sub> | medium | 2.2.6, 2.2 | operational cmd: `for f in /etc/sudoers /etc/sudoers.d/*; do [ -e "$f" ] || continue; sed -ri '/^[[:space…` |
 
 ## PAM module arguments (pwquality, pam_unix, pam_wheel) (`pam`)
@@ -192,7 +195,11 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `cracklib_accounts_password_pam_lcredit`<br><sub>Set Password Strength Minimum Lowercase Characters</sub> | medium | Req-8.2.3, 8.3.6, 8.3 | operational cmd: `f=/etc/pam.d/common-password; grep -qE "^[[:space:]]*password[[:space:]]+requisite[[:sp…` |
 | `cracklib_accounts_password_pam_minlen`<br><sub>Set Password Minimum Length</sub> | medium | Req-8.2.3, 8.3.6, 8.3 | operational cmd: `f=/etc/pam.d/common-password; grep -qE "^[[:space:]]*password[[:space:]]+requisite[[:sp…` |
 | `cracklib_accounts_password_pam_retry`<br><sub>Set Password Retry Limit</sub> | medium | Req-8.1.6, Req-8.1.7, 8.3.4, 8.3 | operational cmd: `f=/etc/pam.d/common-password; grep -qE "^[[:space:]]*password[[:space:]]+requisite[[:sp…` |
+| `ensure_pam_wheel_group_empty`<br><sub>Ensure the Group Used by pam_wheel.so Module Exists on System and is Empty</sub> | medium | 2.2.6, 2.2 | group.present `sugroup` |
+| `ensure_shadow_group_empty`<br><sub>Ensure shadow Group is Empty</sub> | medium | Req-8.2.1, 8.3.2, 8.3 | line in `/etc/group`: `\g<1>` |
+| `no_empty_passwords`<br><sub>Prevent Login to Accounts With Empty Password</sub> | high | Req-8.2.3, 8.3.1, 8.3 | operational cmd: `grep -rlE 'pam_unix\.so.*nullok' /etc/pam.d/ | xargs -r sed --follow-symlinks -i 's/\<n…` |
 | `set_password_hashing_algorithm_commonauth`<br><sub>Set PAM's Common Authentication Hashing Algorithm</sub> | medium | Req-8.2.1, 8.3.2, 8.3 | operational cmd: `f=/etc/pam.d/common-auth; grep -qE "^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+…` |
+| `set_password_hashing_algorithm_systemauth`<br><sub>Set PAM Password Hashing Algorithm - system-auth</sub> | medium | Req-8.2.1, 8.3.2, 8.3 | operational cmd: `sed -i -E --follow-symlinks '/^\s*password\s+required\s+pam_unix\.so/ s/$/ sha512/' /et…` |
 | `use_pam_wheel_group_for_su`<br><sub>Enforce Usage of pam_wheel with Group Parameter for su Authentication</sub> | medium | 2.2.6, 2.2 | operational cmd: `f=/etc/pam.d/su; grep -qE "^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_wheel\.…` |
 
 ## Sudo defaults (sudoers.d drop-ins) (`sudo`)
