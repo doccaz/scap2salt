@@ -899,29 +899,44 @@ def m_audit(r):
         w = w.strip().rstrip('"\'')
         if w not in lines:
             lines.append(w)
-    # 2) syscall / file-filter rules reconstructed from the literal assignments
-    def grab(name):
-        mm = re.search(rf'{name}="([^"]*)"', bash)
-        return mm.group(1).strip() if mm else ""
-    syscall = grab("SYSCALL")
-    key = grab("KEY")
-    auid = grab("AUID_FILTERS")
-    other = grab("OTHER_FILTERS")
-    # Emit when there are syscalls OR a non-syscall filter (e.g. -F dir=... watch).
-    if syscall or other:
-        for arch in ("b32", "b64"):
-            # Match CaC's canonical field order exactly — the audit OVAL checks the
-            # rules.d file textually and is order-sensitive:
-            #   -a always,exit -F arch=ARCH -S SYSCALL(s) OTHER_FILTERS AUID -F key=KEY
-            parts = [f"-a always,exit -F arch={arch}"]
-            parts += [f"-S {s}" for s in syscall.split()]
-            if other:
-                parts.append(other)
-            if auid:
-                parts.append(auid)
-            if key:
-                parts.append(f"-F key={key}")
-            lines.append(" ".join(parts))
+    # 2) syscall / file-filter rules reconstructed from the literal assignments.
+    # A fix script may repeat the whole loop with different parameters (e.g.
+    # audit_rules_suid_privilege_function: uid!=euid then gid!=egid), so handle
+    # each ACTION_ARCH_FILTERS block separately.
+    blocks = [b for b in re.split(r"(?=^\s*ACTION_ARCH_FILTERS=)", bash, flags=re.M)
+              if re.search(r'^\s*(SYSCALL|OTHER_FILTERS)=', b, re.M)] or [bash]
+    seen_other = set()
+    for blk in blocks:
+        def grab(name, blk=blk):
+            # a block may omit a variable the script sets elsewhere: fall back
+            # to the script's first assignment (the old whole-script behaviour)
+            mm = re.search(rf'{name}="([^"]*)"', blk) or re.search(rf'{name}="([^"]*)"', bash)
+            return mm.group(1).strip() if mm else ""
+        syscall = grab("SYSCALL")
+        key = grab("KEY")
+        auid = grab("AUID_FILTERS")
+        other = grab("OTHER_FILTERS")
+        # Only a block with a different OTHER_FILTERS (uid!=euid vs gid!=egid) is
+        # a distinct rule; blocks differing only in syscall grouping keep the
+        # original single-rule behaviour.
+        if other in seen_other:
+            continue
+        seen_other.add(other)
+        # Emit when there are syscalls OR a non-syscall filter (e.g. -F dir=... watch).
+        if syscall or other:
+            for arch in ("b32", "b64"):
+                # Match CaC's canonical field order exactly — the audit OVAL checks
+                # the rules.d file textually and is order-sensitive:
+                #   -a always,exit -F arch=ARCH -S SYSCALL(s) OTHER_FILTERS AUID -F key=KEY
+                parts = [f"-a always,exit -F arch={arch}"]
+                parts += [f"-S {s}" for s in syscall.split()]
+                if other:
+                    parts.append(other)
+                if auid:
+                    parts.append(auid)
+                if key:
+                    parts.append(f"-F key={key}")
+                lines.append(" ".join(parts))
     if not lines:
         return None
     lines = list(dict.fromkeys(lines))
@@ -1019,6 +1034,11 @@ def m_aide(r):
             ("aidecheck_daemon_reload", "cmd.run",
              [("name", "systemctl daemon-reload"),
               ("onchanges", ["file: aidecheck_service", "file: aidecheck_timer"])]),
+            # the AIDE OVAL also requires aidecheck.service itself to be enabled
+            # (not just the timer); enable only, the timer starts it.
+            ("aidecheck_service_enabled", "service.enabled",
+             [("name", "aidecheck.service"),
+              ("require", ["file: aidecheck_service", "cmd: aidecheck_daemon_reload"])]),
             ("aidecheck_timer_enabled", "service.running",
              [("name", "aidecheck.timer"), ("enable", True),
               ("require", ["file: aidecheck_timer", "cmd: aidecheck_daemon_reload"])]),
@@ -1934,6 +1954,57 @@ def emit_na(state_dir, na, meta, mac):
     write(os.path.join(state_dir, "SKIPPED_NA.md"), "\n".join(lines) + "\n")
 
 
+# SLE16+ rules that stay red in an oscap scan ON PURPOSE: the only way to satisfy
+# them is to edit a file owned by an RPM, which would in turn fail
+# rpm_verify_hashes / rpm_verify_permissions (and the edit is undone by the next
+# package update). The runtime value is hardened regardless: our drop-ins win.
+BY_DESIGN_FAILURES = {
+    "sysctl_fs_suid_dumpable": {
+        "why": "systemd ships `fs.suid_dumpable=2` in `/usr/lib/sysctl.d/50-coredump.conf`; "
+               "the static OVAL check also scans that vendor directory. The runtime "
+               "value is already `0` (our `/etc/sysctl.d/fs_suid_dumpable.conf` wins).",
+        "satisfy": "comment out the `fs.suid_dumpable=2` line in "
+                   "`/usr/lib/sysctl.d/50-coredump.conf` (package `systemd`)",
+        "cost": "that file then fails `rpm -V systemd`, so `rpm_verify_hashes` / "
+                "`rpm_verify_permissions` go red, and a systemd update may restore the line",
+    },
+    "sshd_disable_x11_forwarding": {
+        "why": "the vendor `/usr/etc/ssh/sshd_config` carries `X11Forwarding yes`; "
+               "CaC >= 0.1.82 also checks that file. sshd already ignores it "
+               "(`sshd -T` shows `x11forwarding no`: our drop-in is read first).",
+        "satisfy": "delete the `X11Forwarding yes` line from "
+                   "`/usr/etc/ssh/sshd_config` (package `openssh-server`)",
+        "cost": "that file then fails `rpm -V openssh-server`, so `rpm_verify_hashes` "
+                "goes red, and an openssh update may restore the line",
+    },
+}
+
+
+def by_design_failures(mapped):
+    """The BY_DESIGN_FAILURES entries that apply to this run (usr-etc / SLE16+
+    targets only, and only for rules actually present in the profile)."""
+    if not sshd_uses_dropin():
+        return {}
+    present = {s.rule.short for s in mapped}
+    return {k: v for k, v in BY_DESIGN_FAILURES.items() if k in present}
+
+
+def by_design_md(mapped, heading="##"):
+    """Markdown block explaining the by-design failures (empty list if none)."""
+    bd = by_design_failures(mapped)
+    if not bd:
+        return []
+    L = [f"{heading} Rules that fail an oscap scan by design", "",
+         "These rules are mapped and their **runtime values are hardened**, but the "
+         "scanner stays red on them because satisfying the check means editing a "
+         "file that belongs to an RPM. You can have these rules green **or** "
+         "`rpm_verify_*` green, not both. The formula chooses package integrity.", ""]
+    for k, v in sorted(bd.items()):
+        L += [f"- `{k}` — {v['why']}", f"  - *To satisfy it:* {v['satisfy']}.",
+              f"  - *Cost:* {v['cost']}."]
+    return L + [""]
+
+
 def emit_report(outdir, meta, mapped, unmapped, na, mac, n_selected, noremed=()):
     """Dry-run: write a single coverage report, no state files."""
     from collections import Counter
@@ -1964,6 +2035,7 @@ def emit_report(outdir, meta, mapped, unmapped, na, mac, n_selected, noremed=())
         for s in sorted(ops, key=lambda x: x.rule.short):
             L.append(f"- `{s.rule.short}` ({', '.join(s.rule.pci_refs()) or '-'})")
 
+    L += [""] + by_design_md(mapped)
     L += ["", f"## Unmapped ({len(unmapped)})",
           "_No native handler — add a mapper or handle via a reviewed state._", ""]
     fam = {}
@@ -2265,7 +2337,11 @@ def emit_formula(outdir, meta, used_cats, mac, cat_pci=None):
              + "exact action): " + doc_url + " . "
              + "The MAC category auto-detects the active LSM at runtime. "
              + "Uncheck a category to STOP ENFORCING it on the next highstate; "
-             + "unchecking does NOT revert changes already applied.'"),
+             + "unchecking does NOT revert changes already applied."
+             + (" Known scan failures by design on this OS (" + ", ".join(sorted(BY_DESIGN_FAILURES))
+                + "): fixing them means editing RPM-owned files, which would fail rpm_verify; "
+                + "details in " + doc_url.replace("PCI_ACTIONS.md", "README.md") + " ."
+                if sshd_uses_dropin() else "") + "'"),
             "  enabled:",
             "    $type: boolean",
             "    $default: True",
@@ -2695,6 +2771,7 @@ Coverage: **{len(mapped)}/{total}** remediable rules mapped to native Salt ({pct
 - `_verify/salt_verify.sh` — `state.apply test=True` drift check
 - `_verify/oscap_remediate.sh` — independent oscap remediation (cross-check)
 
+{chr(10).join(by_design_md(mapped))}
 ## Deploy on Multi-Linux Manager
 1. Copy `srv/salt/pci_dss/` and `srv/salt/top.sls` into the Salt state tree
    (the MLM/Uyuni server's `/srv/salt`), and the pillar files into `/srv/pillar`.

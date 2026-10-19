@@ -2,7 +2,7 @@
 PCI_DSS_v4_SLE16:
   $type: group
   $name: PCI-DSS v4 Hardening
-  $help: 'Native Salt enforcement generated from xccdf_org.ssgproject.content_profile_pci-dss-4 (MAC: SELinux). Each toggle below names the PCI-DSS sections it covers and what it changes; hover for detail. Full per-rule reference (rule, PCI ref, exact action): https://github.com/doccaz/scap2salt/blob/main/sle16-selinux/salt/PCI_DSS_v4_SLE16/PCI_ACTIONS.md . The MAC category auto-detects the active LSM at runtime. Uncheck a category to STOP ENFORCING it on the next highstate; unchecking does NOT revert changes already applied.'
+  $help: 'Native Salt enforcement generated from xccdf_org.ssgproject.content_profile_pci-dss-4 (MAC: SELinux). Each toggle below names the PCI-DSS sections it covers and what it changes; hover for detail. Full per-rule reference (rule, PCI ref, exact action): https://github.com/doccaz/scap2salt/blob/main/sle16-selinux/salt/PCI_DSS_v4_SLE16/PCI_ACTIONS.md . The MAC category auto-detects the active LSM at runtime. Uncheck a category to STOP ENFORCING it on the next highstate; unchecking does NOT revert changes already applied. Known scan failures by design on this OS (sshd_disable_x11_forwarding, sysctl_fs_suid_dumpable): fixing them means editing RPM-owned files, which would fail rpm_verify; details in https://github.com/doccaz/scap2salt/blob/main/sle16-selinux/salt/PCI_DSS_v4_SLE16/README.md .'
   enabled:
     $type: boolean
     $default: True

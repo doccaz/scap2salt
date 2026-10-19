@@ -3,7 +3,7 @@
 Source datastream: `ssg-sle15-ds.xml`
 Profile: `xccdf_org.ssgproject.content_profile_pci-dss-4`
 MAC framework: `apparmor`
-Generated: 2026-10-19T14:39:16+00:00
+Generated: 2026-10-19T14:50:01+00:00
 
 Coverage: **209/238** remediable rules mapped to native Salt (88%).
 29 unmapped (`UNMAPPED.md`); 18 ship no remediation (`NO_REMEDIATION.md`); 6 not applicable to this MAC (`SKIPPED_NA.md`, equivalence in `MAC_EQUIVALENCE.md`).
@@ -14,6 +14,7 @@ Coverage: **209/238** remediable rules mapped to native Salt (88%).
 - `_verify/oscap_scan.sh` — read-only oscap report
 - `_verify/salt_verify.sh` — `state.apply test=True` drift check
 - `_verify/oscap_remediate.sh` — independent oscap remediation (cross-check)
+
 
 ## Deploy on Multi-Linux Manager
 1. Copy `srv/salt/pci_dss/` and `srv/salt/top.sls` into the Salt state tree

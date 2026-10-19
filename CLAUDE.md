@@ -287,7 +287,7 @@ This lets operators disable any category without editing state files.
 
 ## Known limitations
 
-- **SLE 16 rules that fail by design** (they can only be satisfied by editing packaged files, which would trip `rpm_verify_*`): `sysctl_fs_suid_dumpable` (needs `fs.suid_dumpable=2` commented out of `/usr/lib/sysctl.d/50-coredump.conf`) and `sshd_disable_x11_forwarding` (CaC >= 0.1.82 also wants `X11Forwarding yes` removed from the vendor `/usr/etc/ssh/sshd_config`). The runtime values are hardened regardless (our drop-ins win).
+- **SLE 16 rules that fail by design** (single source of truth: `BY_DESIGN_FAILURES` in `scap2salt.py`, rendered into the generated `README.md`, `coverage-report.md`, the MLM form help and the repo README; they can only be satisfied by editing packaged files, which would trip `rpm_verify_*` — the project chooses package integrity): `sysctl_fs_suid_dumpable` (needs `fs.suid_dumpable=2` commented out of `/usr/lib/sysctl.d/50-coredump.conf`) and `sshd_disable_x11_forwarding` (CaC >= 0.1.82 also wants `X11Forwarding yes` removed from the vendor `/usr/etc/ssh/sshd_config`). The runtime values are hardened regardless (our drop-ins win).
 - SLE 16 `accounts_passwords_pam_faillock_*` and the other PAM-stack rules are not mapped: they need `pam_faillock` lines in `common-auth` plus `/etc/security/faillock.conf`.
 - Only the first matching mapper wins; there is no merging of multiple states for one rule.
 - OVAL checks are not parsed; the script relies entirely on XCCDF rule metadata and bash fix scripts for value extraction.

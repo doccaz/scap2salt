@@ -122,6 +122,22 @@ safe declarative form, so it is left in `UNMAPPED.md` rather than emitted.
 > design; it reflects a real host-role conflict (a PCI-scoped endpoint shouldn't
 > be routing), not a remediation gap.
 
+### SLE 16 rules that fail a scan by design
+
+Two mapped SLE 16 rules stay red in an `oscap` scan on purpose. Both are already
+**hardened at runtime** (our drop-ins win); the *scanner* fails them because the
+upstream check also inspects a **vendor file owned by an RPM**:
+
+| Rule | Why it fails | What satisfying it would take | Cost |
+|---|---|---|---|
+| `sysctl_fs_suid_dumpable` | systemd ships `fs.suid_dumpable=2` in `/usr/lib/sysctl.d/50-coredump.conf` | comment that line out | `rpm -V systemd` flags the file, so `rpm_verify_hashes` / `rpm_verify_permissions` go red; a systemd update may restore it |
+| `sshd_disable_x11_forwarding` | the vendor `/usr/etc/ssh/sshd_config` has `X11Forwarding yes` (`sshd -T` still shows `no`) | delete that line | `rpm -V openssh-server` flags the file, so `rpm_verify_hashes` goes red; an openssh update may restore it |
+
+You can have these two green **or** `rpm_verify_*` green, not both. scap2salt
+chooses package integrity. The same notice is generated into the formula's
+`README.md`, `coverage-report.md` and the MLM form's help text (see
+`BY_DESIGN_FAILURES` in `scap2salt.py`).
+
 > Not a deviation, but worth knowing: `sshd_disable_root_login` can still report
 > *fail* if the host carries a separate drop-in (e.g. `/etc/ssh/sshd_config.d/root.conf`)
 > with `PermitRootLogin yes`. scap2salt's `00-pci-hardening.conf` sorts first so
