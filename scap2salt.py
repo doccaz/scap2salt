@@ -443,6 +443,14 @@ def m_service(r):
     st.extra_states.append((
         f"svc_mask_{svc}", "service.masked", [("name", svc)],
     ))
+    # Packages that ship a matching .socket (e.g. rsync's rsyncd.socket) must
+    # have it masked as well or the OVAL still sees a loaded, startable unit.
+    st.extra_states.append((
+        f"svc_mask_socket_{svc}", "cmd.run",
+        [("name", f"systemctl mask --now {svc}.socket"),
+         ("onlyif", f"systemctl -q list-unit-files {svc}.socket"),
+         ("unless", f"systemctl is-enabled {svc}.socket 2>/dev/null | grep -qx masked")],
+    ))
     return st
 
 
@@ -1150,6 +1158,37 @@ def m_pam(r):
 @mapper
 def _m_pam(r):
     return m_pam(r)
+
+
+@mapper
+def m_pwquality(r):
+    """SLE16-style pwquality rules: seed /etc/security/pwquality.conf from the
+    vendor copy, then set 'key = value' there (CaC >= 0.1.82 checks this file)."""
+    bash = r.bash or ""
+    if "/etc/security/pwquality.conf" not in bash or "VALUE_NAMES+=" in bash:
+        return None
+    km = re.search(r'stripped_key=\$\(sed [^)]*<<<\s*"\^(\w+)"', bash)
+    vm = re.search(r'printf\s+-v\s+formatted_output\s+"%s = %s"\s+"[^"]*"\s+"(\$[^"]+)"', bash)
+    if not km or not vm:
+        return None
+    key, val = km.group(1), shell_resolve(vm.group(1), bash)
+    if "$" in val or not val:
+        return None
+    seed = re.search(r'cp -p "([^"]*pwquality\.conf)" "/etc/security/pwquality\.conf"', bash)
+    st = SaltState(
+        f"pwquality_{key}_seed", "file.copy",
+        [("name", "/etc/security/pwquality.conf"),
+         ("source", seed.group(1) if seed else "/usr/lib/security/pwquality.conf"),
+         ("preserve", True)], "pam", r)
+    st.extra_states.append((
+        f"pwquality_{key}", "file.replace",
+        [("name", "/etc/security/pwquality.conf"),
+         ("pattern", rf"^[ \t]*{key}\b[^\n]*$"),
+         ("repl", f"{key} = {val}"),
+         ("append_if_not_found", True),
+         ("backup", False),
+         ("require", [f"file: pwquality_{key}_seed"])]))
+    return st
 
 
 @mapper

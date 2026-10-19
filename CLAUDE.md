@@ -25,9 +25,9 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | Remediable (coverage denominator) | 238 | 230 |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **209/238 — 87%** | **197/230 — 85%** |
+| **Native coverage** | **209/238 — 87%** | **201/230 — 87%** |
 | Guarded operational states | 18 | 13 |
-| Remediable rules still unmapped | 29 | 33 |
+| Remediable rules still unmapped | 29 | 29 |
 
 Regenerate with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`. Keep these numbers in sync with the README's "Current coverage" section when handlers change.
 
@@ -116,6 +116,7 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_audit` | `audit_rules_*`, `audit_*`, + rules using the `rules.d` macro (e.g. `directory_access_var_log_audit`) | `audit` |
 | `m_auditd_conf` | `auditd_*` (auditd.conf / audisp plugin `key = value`) | `audit` |
 | `m_pam` | PAM module-arg rules using CaC's `VALUES/VALUE_NAMES/ARGS` macro (cracklib pwquality, `pam_unix` hashing, `pam_wheel`) | `pam` |
+| `m_pwquality` | SLE16-style `accounts_password_pam_*` that edit `/etc/security/pwquality.conf` (seeded from `/usr/lib/security/pwquality.conf`) | `pam` |
 | `m_sudoers` | `sudo_*` with an `echo "Defaults …" >>` fix (SLE16+: seeds `/etc/sudoers` from `/usr/etc/sudoers` and edits it in place; SLE15: `sudoers.d` drop-in) | `sudo` |
 | `m_coredump` | `coredump_*` (systemd `[Coredump]` key=value) | `coredump` |
 | `m_grub_audit` | `grub2_audit_*` (kernel cmdline args) | `grub` |
@@ -286,6 +287,8 @@ This lets operators disable any category without editing state files.
 
 ## Known limitations
 
+- **SLE 16 rules that fail by design** (they can only be satisfied by editing packaged files, which would trip `rpm_verify_*`): `sysctl_fs_suid_dumpable` (needs `fs.suid_dumpable=2` commented out of `/usr/lib/sysctl.d/50-coredump.conf`) and `sshd_disable_x11_forwarding` (CaC >= 0.1.82 also wants `X11Forwarding yes` removed from the vendor `/usr/etc/ssh/sshd_config`). The runtime values are hardened regardless (our drop-ins win).
+- SLE 16 `accounts_passwords_pam_faillock_*` and the other PAM-stack rules are not mapped: they need `pam_faillock` lines in `common-auth` plus `/etc/security/faillock.conf`.
 - Only the first matching mapper wins; there is no merging of multiple states for one rule.
 - OVAL checks are not parsed; the script relies entirely on XCCDF rule metadata and bash fix scripts for value extraction.
 - Bash fix extraction uses regex heuristics — unusual bash in a fix script may produce `None` and fall through to `UNMAPPED.md`.

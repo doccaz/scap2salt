@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-10-19T14:11:01+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
+Generated 2026-10-19T14:39:16+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -179,6 +179,10 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 
 | Rule | Sev | PCI-DSS | Action |
 |---|---|---|---|
+| `accounts_password_pam_dcredit`<br><sub>Ensure PAM Enforces Password Requirements - Minimum Digit Characters</sub> | medium | Req-8.2.3, 8.3.6, 8.3 | file.copy `/etc/security/pwquality.conf` |
+| `accounts_password_pam_lcredit`<br><sub>Ensure PAM Enforces Password Requirements - Minimum Lowercase Characters</sub> | medium | Req-8.2.3, 8.3.6, 8.3 | file.copy `/etc/security/pwquality.conf` |
+| `accounts_password_pam_minlen`<br><sub>Ensure PAM Enforces Password Requirements - Minimum Length</sub> | medium | Req-8.2.3, 8.3.6, 8.3 | file.copy `/etc/security/pwquality.conf` |
+| `accounts_password_pam_retry`<br><sub>Ensure PAM Enforces Password Requirements - Authentication Retry Prompts Permitted Per-Session</sub> | medium | 1, 11, 12, 15, 16, 3, 5, 9, 5.5.3, BAI10.01, BAI10.02, BAI10.03, BAI10.05, DSS05.04, DSS05.05, DSS05.07, DSS05.10, DSS06.03, DSS06.10, 4.3.3.2.2, 4.3.3.5.1, 4.3.3.5.2, 4.3.3.6.1, 4.3.3.6.2, 4.3.3.6.3, 4.3.3.6.4, 4.3.3.6.5, 4.3.3.6.6, 4.3.3.6.7, 4.3.3.6.8, 4.3.3.6.9, 4.3.3.7.2, 4.3.3.7.4, 4.3.4.3.2, 4.3.4.3.3, SR 1.1, SR 1.10, SR 1.2, SR 1.3, SR 1.4, SR 1.5, SR 1.7, SR 1.8, SR 1.9, SR 2.1, SR 7.6, A.12.1.2, A.12.5.1, A.12.6.2, A.14.2.2, A.14.2.3, A.14.2.4, A.18.1.4, A.7.1.1, A.9.2.1, A.9.2.2, A.9.2.3, A.9.2.4, A.9.2.6, A.9.3.1, A.9.4.2, A.9.4.3, CM-6(a), AC-7(a), IA-5(4), PR.AC-1, PR.AC-6, PR.AC-7, PR.IP-1, SRG-OS-000069-GPOS-00037, SRG-OS-000480-GPOS-00227, R68 | file.copy `/etc/security/pwquality.conf` |
 | `set_password_hashing_algorithm_commonauth`<br><sub>Set PAM's Common Authentication Hashing Algorithm</sub> | medium | Req-8.2.1, 8.3.2, 8.3 | operational cmd: `f=/etc/pam.d/common-auth; grep -qE "^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+…` |
 | `use_pam_wheel_group_for_su`<br><sub>Enforce Usage of pam_wheel with Group Parameter for su Authentication</sub> | medium | 2.2.6, 2.2 | operational cmd: `f=/etc/pam.d/su; grep -qE "^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_wheel\.…` |
 

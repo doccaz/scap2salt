@@ -62,7 +62,7 @@ PCI_DSS_v4_SLE16:
   pam:
     $type: boolean
     $default: True
-    $name: "PAM module arguments (pwquality, pam_unix, pam_wheel) [PCI 2.2, 8.2, 8.3] — password complexity & hashing"
+    $name: "PAM module arguments (pwquality, pam_unix, pam_wheel) [PCI 1, 2.2, 3, 4.3, 5, 5.5, …] — password complexity & hashing"
     $help: "PCI-DSS §8.3.6 — PAM module argument enforcement. Sets password complexity via pam_pwquality (minlen, dcredit, ucredit, lcredit, ocredit, maxrepeat, difok), SHA-512 hashing via pam_unix, and restricts su to the wheel group via pam_wheel."
   sudo:
     $type: boolean
