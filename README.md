@@ -48,6 +48,8 @@ out/srv/
 
 Every state file is wrapped in a Jinja guard so any category can be disabled by setting `<formula>:<category>: False` in the pillar (or toggling the checkbox in the MLM Formulas tab) — where `<formula>` is the `--formula-name` (default `pci_dss`).
 
+**Optional SSH allow-list.** `sshd_limit_user_access` has no automatic fix upstream (only you know who may log in), so the form has two optional text fields, *SSH: only allow these GROUPS* (`sshd_allow_groups`) and *…USERS* (`sshd_allow_users`). Leave them empty for unrestricted SSH (the rule then stays red); fill them with space-separated names and the formula writes `AllowGroups`/`AllowUsers` and reloads sshd. If none of the names exist the highstate **fails instead of restricting anyone**. Include your admin and management accounts, and note that this also keeps `root` out of SSH unless it is listed. Changes to any sshd setting now take effect immediately through an `sshd -t && systemctl reload sshd` step (existing sessions are untouched).
+
 ## Design principles
 
 **Native states only.** Each SCAP rule is mapped to a first-class Salt state (`sysctl.present`, `pkg.installed`, `service.running`, `file.managed`, `iptables.append`, `mount.mounted`, etc.). Rules for which no declarative primitive exists are either emitted as guarded `cmd.run` states (idempotent via `creates`/`onlyif`/`unless`) or listed in `UNMAPPED.md`. Nothing is silently wrapped in a bare `cmd.run`.

@@ -49,6 +49,18 @@ PCI_DSS_v4_SLE15:
     $default: True
     $name: "SSH server hardening [PCI 2.2, 2.3, 8.1, 8.2] — harden sshd_config.d"
     $help: "PCI-DSS §2.2.4, §2.2.7, §8.3.1 — Hardens /etc/ssh/sshd_config.d/. Disables root login and empty passwords, restricts FIPS-validated ciphers/MACs/KexAlgorithms, sets idle timeout (ClientAliveInterval / CountMax), disables X11 and TCP forwarding, enables PAM."
+  sshd_allow_groups:
+    $type: text
+    $default: ''
+    $placeholder: users wheel
+    $name: 'SSH: only allow these GROUPS to log in [PCI 2.2.4, 2.2.6] (optional)'
+    $help: "Space-separated group names written as AllowGroups. Satisfies sshd_limit_user_access, which has no automatic fix because only you know who may log in. Leave EMPTY for no restriction. WARNING: members of other groups, including root, can no longer log in over SSH; include your admin and management accounts. If none of the groups exist the highstate fails and nothing is restricted."
+  sshd_allow_users:
+    $type: text
+    $default: ''
+    $placeholder: admin1 admin2
+    $name: 'SSH: only allow these USERS to log in [PCI 2.2.4, 2.2.6] (optional)'
+    $help: "Space-separated user names written as AllowUsers (alternative or addition to the group list). Leave EMPTY for no restriction. Same WARNING as the group list."
   lineinfile:
     $type: boolean
     $default: True

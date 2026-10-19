@@ -1933,6 +1933,10 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                          "    - name: service auditd restart\n"
                          "    - onchanges:\n"
                          + "".join(f"      - file: {salt_quote_id(i)}\n" for i in conf))
+        if cat == "sshd":
+            body += sshd_extra_block(
+                sshd_target_file(),
+                [x.id for x in states if x.fun == "file.replace"])
         if cat == "dconf":
             ids = []
             for s in states:
@@ -2085,6 +2089,49 @@ def emit_na(state_dir, na, meta, mac):
     for r in sorted(na, key=lambda x: x.short):
         lines.append(f"- `{r.short}` — {r.title} (PCI {', '.join(r.pci_refs()) or '-'})")
     write(os.path.join(state_dir, "SKIPPED_NA.md"), "\n".join(lines) + "\n")
+
+
+def sshd_extra_block(target, state_ids):
+    """Jinja block appended to sshd.sls: operator-supplied AllowGroups/AllowUsers
+    (pillar, empty = unrestricted) and a reload of sshd so the file changes take
+    effect in the running daemon.
+
+    sshd_limit_user_access ships no CaC remediation because only the site knows
+    which users/groups may log in. The values come from the form (pillar keys
+    sshd_allow_groups / sshd_allow_users); a typo that matches no existing
+    group/user fails the highstate loudly instead of locking everyone out."""
+    on = "".join(f"      - file: {salt_quote_id(i)}\n" for i in state_ids)
+    def one(kind, directive, getent):
+        v = f"sshd_a{kind[0]}"
+        chk = ("'for x in ' ~ " + v + " ~ '; do getent " + getent
+               + " \"$x\" >/dev/null && exit 0; done; exit 1'")
+        return (
+            "{%- if " + v + " %}\n"
+            f"sshd_{directive}:\n  file.replace:\n"
+            f"    - name: {target}\n"
+            f"    - pattern: \"^{directive}\\\\s.*$\"\n"
+            "    - repl: {{ ('" + directive + " ' ~ " + v + ") | tojson }}\n"
+            "    - append_if_not_found: True\n    - backup: False\n"
+            "    - onlyif: {{ (" + chk + ") | tojson }}\n"
+            f"sshd_{directive}_check:\n  cmd.run:\n"
+            "    - name: \"echo 'sshd " + directive + ": none of the listed names exist; "
+            "restriction NOT applied' >&2; exit 1\"\n"
+            "    - unless: {{ (" + chk + ") | tojson }}\n"
+            "{%- endif %}\n")
+    san = "regex_replace('[^A-Za-z0-9_.@ -]', '')"
+    return (
+        "\n# Optional SSH allow-lists (satisfy sshd_limit_user_access). Leave empty for\n"
+        "# unrestricted logins; enter space-separated names in the MLM form.\n"
+        "{%- set sshd_ag = ((p.get('sshd_allow_groups', '') or '') | string | " + san + ").strip() %}\n"
+        "{%- set sshd_au = ((p.get('sshd_allow_users', '') or '') | string | " + san + ").strip() %}\n"
+        + one("groups", "AllowGroups", "group")
+        + one("users", "AllowUsers", "passwd")
+        + "\n# Make the changes live: validate, then reload (existing sessions persist).\n"
+          "sshd_reload:\n  cmd.run:\n    - name: sshd -t && systemctl reload sshd\n"
+          "    - onlyif: systemctl is-active --quiet sshd\n    - onchanges:\n"
+        + on
+        + "{%- if sshd_ag %}\n      - file: sshd_AllowGroups\n{%- endif %}\n"
+          "{%- if sshd_au %}\n      - file: sshd_AllowUsers\n{%- endif %}\n")
 
 
 # SLE16+ rules that stay red in an oscap scan ON PURPOSE: the only way to satisfy
@@ -2508,6 +2555,27 @@ def emit_formula(outdir, meta, used_cats, mac, cat_pci=None):
         if help_text:
             entry.append(f"    $help: \"{help_text}\"")
         form += entry
+        if c == "sshd":
+            form += [
+                "  sshd_allow_groups:",
+                "    $type: text",
+                "    $default: ''",
+                "    $placeholder: users wheel",
+                "    $name: 'SSH: only allow these GROUPS to log in [PCI 2.2.4, 2.2.6] (optional)'",
+                "    $help: \"Space-separated group names written as AllowGroups. Satisfies "
+                "sshd_limit_user_access, which has no automatic fix because only you know who "
+                "may log in. Leave EMPTY for no restriction. WARNING: members of other groups, "
+                "including root, can no longer log in over SSH; include your admin and "
+                "management accounts. If none of the groups exist the highstate fails and "
+                "nothing is restricted.\"",
+                "  sshd_allow_users:",
+                "    $type: text",
+                "    $default: ''",
+                "    $placeholder: admin1 admin2",
+                "    $name: 'SSH: only allow these USERS to log in [PCI 2.2.4, 2.2.6] (optional)'",
+                "    $help: \"Space-separated user names written as AllowUsers (alternative or "
+                "addition to the group list). Leave EMPTY for no restriction. Same WARNING as "
+                "the group list.\""]
     write(os.path.join(fdir, "form.yml"), "\n".join(form) + "\n")
 
     # Distinct display name per formula so multiple OS formulas are
@@ -2867,6 +2935,14 @@ def emit_unmapped(state_dir, unmapped, meta, profile_id):
     write(os.path.join(state_dir, "UNMAPPED.md"), "\n".join(lines))
 
 
+NOREMED_NOTES = {
+    "sshd_limit_user_access": (
+        "Site-specific: set the `sshd_allow_groups` and/or `sshd_allow_users` pillar "
+        "keys (MLM form: *SSH: only allow these groups/users*) and the formula writes "
+        "`AllowGroups`/`AllowUsers` and reloads sshd. Unset = unrestricted, rule stays red."),
+}
+
+
 def emit_noremed(state_dir, noremed, meta, profile_id):
     lines = [f"# Rules with no remediation — {profile_id}", "",
              f"Generated {meta['ts']} from `{meta['src']}`.", "",
@@ -2882,6 +2958,8 @@ def emit_noremed(state_dir, noremed, meta, profile_id):
         for r in sorted(by_fam[fam], key=lambda x: x.short):
             pci = ", ".join(r.pci_refs()) or "-"
             lines.append(f"- `{r.short}` — {r.title} (PCI {pci}; sev {r.severity})")
+            if r.short in NOREMED_NOTES:
+                lines.append(f"  - {NOREMED_NOTES[r.short]}")
         lines.append("")
     write(os.path.join(state_dir, "NO_REMEDIATION.md"), "\n".join(lines))
 

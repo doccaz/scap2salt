@@ -1,6 +1,6 @@
 # Rules with no remediation — xccdf_org.ssgproject.content_profile_pci-dss-4
 
-Generated 2026-10-19T15:15:53+00:00 from `ssg-sle15-ds.xml`.
+Generated 2026-10-19T15:28:25+00:00 from `ssg-sle15-ds.xml`.
 
 18 selected rule(s) ship **no `<fix>` of any kind** in the SSG (no shell, no Ansible). These are detective-only — there is nothing to automate. They require manual or site-specific remediation and are **not** counted against native coverage.
 
@@ -47,3 +47,4 @@ Generated 2026-10-19T15:15:53+00:00 from `ssg-sle15-ds.xml`.
 
 ## sshd* (1)
 - `sshd_limit_user_access` — Limit Users' SSH Access (PCI Req-2.2.4, 2.2.6, 2.2; sev unknown)
+  - Site-specific: set the `sshd_allow_groups` and/or `sshd_allow_users` pillar keys (MLM form: *SSH: only allow these groups/users*) and the formula writes `AllowGroups`/`AllowUsers` and reloads sshd. Unset = unrestricted, rule stays red.

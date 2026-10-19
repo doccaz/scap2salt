@@ -251,6 +251,8 @@ Every category `.sls` is wrapped in:
 ```
 This lets operators disable any category without editing state files.
 
+Two **optional text pillar keys** (also text fields in the MLM form, empty = off) live under the same namespace and are read by `sshd.sls`: `sshd_allow_groups` and `sshd_allow_users`. They satisfy `sshd_limit_user_access`, which ships no CaC remediation because only the site knows who may log in. Values are sanitised (`regex_replace`), written as `AllowGroups`/`AllowUsers` in the sshd target file, and a name list matching no existing group/user **fails the highstate loudly instead of locking everyone out** (`sshd_Allow*_check`). `sshd.sls` also ends with an `sshd_reload` (`sshd -t && systemctl reload sshd`, `onchanges` of every sshd state) so the hardening is live in the running daemon, not just in the files.
+
 ---
 
 ## CLI flags
