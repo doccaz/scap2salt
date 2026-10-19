@@ -33,7 +33,7 @@ SSG_LOCAL_PATHS = [
     "/usr/share/xml/scap/ssg/content/ssg-{target}-ds.xml",
     "/usr/share/openscap/ssg-{target}-ds.xml",
 ]
-CAC_RELEASE = "v0.1.81"
+CAC_RELEASE = "v0.1.82"
 # Releases ship compiled datastreams only inside the zip archive.
 CAC_ZIP_URL = (
     "https://github.com/ComplianceAsCode/content/releases/download/"
@@ -1212,10 +1212,11 @@ def m_grub_audit(r):
     if not r.short.startswith("grub2_audit"):
         return None
     bash = r.bash or ""
-    em = re.search(r"""echo\s+['"]GRUB_CMDLINE_LINUX="([^"]+)"['"]""", bash)
+    # CaC <=0.1.81 wrote echo 'GRUB_CMDLINE_LINUX="x"'; 0.1.82+ writes echo "GRUB_CMDLINE_LINUX=\"x\"".
+    em = re.search(r"""echo\s+(?:'GRUB_CMDLINE_LINUX="([^"]+)"'|"GRUB_CMDLINE_LINUX=\\"([^"\\]+)\\"")""", bash)
     if not em:
         return None
-    param = shell_resolve(em.group(1), bash)
+    param = shell_resolve(em.group(1) or em.group(2), bash)
     return _grub_cmdline_state(f"grub_{r.short}", param, r, category="grub")
 
 
@@ -1715,8 +1716,10 @@ def emit_tree(outdir, src, profile_id, mapped, unmapped, na, mac, noremed=()):
                     ids.append(s.id)
                     ids += [e[0] for e in s.extra_states]
             if ids:
-                body += ("\n# Apply dconf changes to the compiled databases.\n"
+                body += ("\n# Apply dconf changes to the compiled databases (skipped on\n"
+                         "# headless hosts where dconf is not installed).\n"
                          "dconf_update:\n  cmd.run:\n    - name: dconf update\n"
+                         "    - onlyif: command -v dconf\n"
                          "    - onchanges:\n"
                          + "".join(f"      - file: {salt_quote_id(i)}\n" for i in ids))
         if any(getattr(s, "needs_grub_reload", False) for s in states):

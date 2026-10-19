@@ -201,7 +201,7 @@ formula layout and builds an RPM:
 - `extra_states` — additional sibling state blocks appended after the main block (used by `m_dconf` for lock fragments, and `m_aide` for the timer + service pair).
 - `audit_fragment = True` — marks a state as an auditd rule fragment, causing `augenrules --load` to be appended with an `onchanges` requisite.
 - `auditd_restart = True` — marks an `auditd.conf`/audisp `key = value` state (from `m_auditd_conf`), appending `service auditd restart` with an `onchanges` requisite.
-- `dconf_reload = True` — similar trigger for `dconf update`.
+- `dconf_reload = True` — similar trigger for `dconf update`, guarded with `onlyif: command -v dconf` so headless hosts without dconf don't fail the highstate (the fragments are still written).
 - `needs_grub_reload = True` — triggers `grub2-mkconfig` in the mac category.
 - `operational = True` — marks a `cmd.run` state that has no declarative alternative; noted in comments and counted separately ("N guarded operational states") in both the run summary and `coverage-report.md`.
 

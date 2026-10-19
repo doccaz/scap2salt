@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-06-07T14:20:24+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
+Generated 2026-10-19T13:57:38+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -119,7 +119,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `file_permissions_etc_passwd`<br><sub>Verify Permissions on passwd File</sub> | medium | Req-8.7.c, 2.2.6, 2.2 | manage `/etc/passwd` (mode 0644) |
 | `file_permissions_etc_shadow`<br><sub>Verify Permissions on shadow File</sub> | medium | Req-8.7.c, 2.2.6, 2.2 | manage `/etc/shadow` (mode 0000) |
 | `file_permissions_grub2_cfg`<br><sub>Verify /boot/grub2/grub.cfg Permissions</sub> | medium | 2.2.6, 2.2 | manage `/boot/grub2/grub.cfg` (mode 0600) |
-| `file_permissions_sshd_config`<br><sub>Verify Permissions on SSH Server config file</sub> | medium | 2.2.6, 2.2 | manage `/etc/ssh/sshd_config` (mode 0600) |
+| `file_permissions_sshd_config`<br><sub>Verify Permissions on SSH Server config file</sub> | medium | 2.2.6, 2.2 | manage `/usr/etc/ssh/sshd_config` (mode 0600) |
 | `permissions_local_var_log`<br><sub>Verify permissions of log files</sub> | medium | 10.3.1, 10.3 | operational cmd: `find /var/log/ -perm /u+xs,g+xws,o+xwrt -type f -exec chmod u-xs,g-xws,o-xwrt {} +` |
 
 ## Disabled kernel modules (`kernel_modules`)
@@ -155,7 +155,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | Rule | Sev | PCI-DSS | Action |
 |---|---|---|---|
 | `account_disable_post_pw_expiration`<br><sub>Set Account Expiration Following Inactivity</sub> | medium | Req-8.1.4, 8.2.6, 8.2 | line in `/etc/default/useradd`: `INACTIVE=90` |
-| `accounts_maximum_age_login_defs`<br><sub>Set Password Maximum Age</sub> | medium | Req-8.2.4, 8.3.9, 8.3 | line in `/etc/login.defs`: `PASS_MAX_DAYS 90` |
+| `accounts_maximum_age_login_defs`<br><sub>Set Password Maximum Age</sub> | medium | Req-8.2.4, 8.3.9, 8.3 | line in `/etc/login.defs.d/oscap.login.defs`: `PASS_MAX_DAYS 90` |
 | `accounts_password_warn_age_login_defs`<br><sub>Set Password Warning Age</sub> | medium | Req-8.2.4, 8.3.9, 8.3 | line in `/etc/login.defs.d/oscap.login.defs`: `PASS_WARN_AGE 7` |
 | `accounts_tmout`<br><sub>Set Interactive Session Timeout</sub> | medium | 8.6.1, 8.6 | manage `/etc/profile.d/autologout.sh` (mode 0755) |
 | `chronyd_run_as_chrony_user`<br><sub>Ensure that chronyd is running under chrony user account</sub> | medium | 10.6.3, 10.6 | line in `/etc/sysconfig/chronyd`: `OPTIONS="-u chrony"` |

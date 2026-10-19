@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-06-07T14:20:24+00:00 from `ssg-sle15-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: apparmor).
+Generated 2026-10-19T13:57:38+00:00 from `ssg-sle15-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: apparmor).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -163,8 +163,8 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | Rule | Sev | PCI-DSS | Action |
 |---|---|---|---|
 | `account_disable_post_pw_expiration`<br><sub>Set Account Expiration Following Inactivity</sub> | medium | Req-8.1.4, 8.2.6, 8.2 | line in `/etc/default/useradd`: `INACTIVE=90` |
-| `accounts_maximum_age_login_defs`<br><sub>Set Password Maximum Age</sub> | medium | Req-8.2.4, 8.3.9, 8.3 | line in `/etc/login.defs`: `PASS_MAX_DAYS 90` |
-| `accounts_password_warn_age_login_defs`<br><sub>Set Password Warning Age</sub> | medium | Req-8.2.4, 8.3.9, 8.3 | line in `/etc/login.defs`: `PASS_WARN_AGE 7` |
+| `accounts_maximum_age_login_defs`<br><sub>Set Password Maximum Age</sub> | medium | Req-8.2.4, 8.3.9, 8.3 | line in `/etc/login.defs.d/oscap.login.defs`: `PASS_MAX_DAYS 90` |
+| `accounts_password_warn_age_login_defs`<br><sub>Set Password Warning Age</sub> | medium | Req-8.2.4, 8.3.9, 8.3 | line in `/etc/login.defs.d/oscap.login.defs`: `PASS_WARN_AGE 7` |
 | `accounts_tmout`<br><sub>Set Interactive Session Timeout</sub> | medium | 8.6.1, 8.6 | manage `/etc/profile.d/autologout.sh` (mode 0755) |
 | `chronyd_run_as_chrony_user`<br><sub>Ensure that chronyd is running under chrony user account</sub> | medium | 10.6.3, 10.6 | line in `/etc/sysconfig/chronyd`: `OPTIONS="-u chrony"` |
 | `chronyd_specify_remote_server`<br><sub>A remote time server for Chrony is configured</sub> | medium | Req-10.4.3, 10.6.2, 10.6 | line in `/etc/chrony.conf`: `\g<0>` |
@@ -173,7 +173,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `postfix_network_listening_disabled`<br><sub>Disable Postfix Network Listening</sub> | medium | 1.4.2, 1.4 | line in `/etc/postfix/main.cf`: `inet_interfaces=loopback-only` |
 | `securetty_root_login_console_only`<br><sub>Restrict Virtual Console Root Logins</sub> | medium | 8.6.1, 8.6 | edit `/etc/securetty` |
 | `set_password_hashing_algorithm_libuserconf`<br><sub>Set Password Hashing Algorithm in /etc/libuser.conf</sub> | medium | Req-8.2.1, 8.3.2, 8.3 | line in `/etc/libuser.conf`: `crypt_style = sha512` |
-| `set_password_hashing_algorithm_logindefs`<br><sub>Set Password Hashing Algorithm in /etc/login.defs</sub> | medium | Req-8.2.1, 8.3.2, 8.3 | line in `/etc/login.defs`: `ENCRYPT_METHOD SHA512` |
+| `set_password_hashing_algorithm_logindefs`<br><sub>Set Password Hashing Algorithm in /etc/login.defs</sub> | medium | Req-8.2.1, 8.3.2, 8.3 | line in `/etc/login.defs.d/oscap.login.defs`: `ENCRYPT_METHOD SHA512` |
 
 ## Invasive auth hardening: password aging + sudo re-auth (opt-in) (`accounts`)
 
@@ -220,7 +220,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `audit_rules_dac_modification_lsetxattr`<br><sub>Record Events that Modify the System's Discretionary Access Controls - lsetxattr</sub> | medium | Req-10.5.5, 10.3.4, 10.3 | manage `/etc/audit/rules.d/pci-audit_rules_dac_modification_lsetxattr.rules` (mode 0640) |
 | `audit_rules_dac_modification_removexattr`<br><sub>Record Events that Modify the System's Discretionary Access Controls - removexattr</sub> | medium | Req-10.5.5, 10.3.4, 10.3 | manage `/etc/audit/rules.d/pci-audit_rules_dac_modification_removexattr.rules` (mode 0640) |
 | `audit_rules_dac_modification_setxattr`<br><sub>Record Events that Modify the System's Discretionary Access Controls - setxattr</sub> | medium | Req-10.5.5, 10.3.4, 10.3 | manage `/etc/audit/rules.d/pci-audit_rules_dac_modification_setxattr.rules` (mode 0640) |
-| `audit_rules_enable_syscall_auditing`<br><sub>Remove Default Configuration to Disable Syscall Auditing</sub> | medium | CM-6(b), CM-6.1(iv), SRG-OS-000480-GPOS-00227, SLES-15-030820, SLES-15-750450450, SV-234981r991589_rule | operational cmd: `sed -ri 's/^([[:space:]]*-a[[:space:]]+task,never)/#\1/' /etc/audit/rules.d/*.rules` |
+| `audit_rules_enable_syscall_auditing`<br><sub>Remove Default Configuration to Disable Syscall Auditing</sub> | medium | CM-6(b), CM-6.1(iv), SRG-OS-000480-GPOS-00227, SLES-15-750450450, SLES-15-030820, SV-234981r991589_rule, V-234981 | operational cmd: `sed -ri 's/^([[:space:]]*-a[[:space:]]+task,never)/#\1/' /etc/audit/rules.d/*.rules` |
 | `audit_rules_file_deletion_events_rename`<br><sub>Ensure auditd Collects File Deletion Events by User - rename</sub> | medium | Req-10.2.7, 10.2.1.7, 10.2.1, 10.2 | manage `/etc/audit/rules.d/pci-audit_rules_file_deletion_events_rename.rules` (mode 0640) |
 | `audit_rules_file_deletion_events_renameat`<br><sub>Ensure auditd Collects File Deletion Events by User - renameat</sub> | medium | Req-10.2.7, 10.2.1.7, 10.2.1, 10.2 | manage `/etc/audit/rules.d/pci-audit_rules_file_deletion_events_renameat.rules` (mode 0640) |
 | `audit_rules_file_deletion_events_renameat2`<br><sub>Ensure auditd Collects File Deletion Events by User - renameat2</sub> | medium | 10.2.1.7, 10.2.1, 10.2 | manage `/etc/audit/rules.d/pci-audit_rules_file_deletion_events_renameat2.rules` (mode 0640) |
