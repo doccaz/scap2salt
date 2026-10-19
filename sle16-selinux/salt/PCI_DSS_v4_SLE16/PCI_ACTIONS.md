@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-10-19T13:57:38+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
+Generated 2026-10-19T14:11:01+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -186,9 +186,9 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 
 | Rule | Sev | PCI-DSS | Action |
 |---|---|---|---|
-| `sudo_add_use_pty`<br><sub>Ensure Only Users Logged In To Real tty Can Execute Sudo - sudo use_pty</sub> | medium | Req-10.2.5, 2.2.6, 2.2 | manage `/etc/sudoers.d/99-pci-sudo_add_use_pty` (mode 0440) |
-| `sudo_custom_logfile`<br><sub>Ensure Sudo Logfile Exists - sudo logfile</sub> | low | Req-10.2.5, 2.2.6, 2.2 | manage `/etc/sudoers.d/99-pci-sudo_custom_logfile` (mode 0440) |
-| `sudo_require_reauthentication`<br><sub>Require Re-Authentication When Using the sudo Command</sub> | medium | 2.2.6, 2.2 | manage `/etc/sudoers.d/99-pci-sudo_require_reauthentication` (mode 0440) |
+| `sudo_add_use_pty`<br><sub>Ensure Only Users Logged In To Real tty Can Execute Sudo - sudo use_pty</sub> | medium | Req-10.2.5, 2.2.6, 2.2 | file.copy `/etc/sudoers` |
+| `sudo_custom_logfile`<br><sub>Ensure Sudo Logfile Exists - sudo logfile</sub> | low | Req-10.2.5, 2.2.6, 2.2 | file.copy `/etc/sudoers` |
+| `sudo_require_reauthentication`<br><sub>Require Re-Authentication When Using the sudo Command</sub> | medium | 2.2.6, 2.2 | file.copy `/etc/sudoers` |
 
 ## Audit rules & auditd configuration (`audit`)
 
@@ -289,5 +289,5 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 |---|---|---|---|
 | `grub2_enable_selinux`<br><sub>Ensure SELinux Not Disabled in /etc/default/grub</sub> | medium | 1.2.6, 1.2 | line in `/etc/default/grub`: `\g<1>security=selinux \g<2>"` |
 | `selinux_policytype`<br><sub>Configure SELinux Policy</sub> | medium | 1.2.6, 1.2 | line in `/etc/selinux/config`: `SELINUXTYPE=targeted` |
-| `selinux_state`<br><sub>Ensure SELinux State is Enforcing</sub> | high | 1.2.6, 1.2 | SELinux mode `enforcing` |
+| `selinux_state`<br><sub>Ensure SELinux State is Enforcing</sub> | high | 1.2.6, 1.2 | line in `/etc/selinux/config`: `SELINUX=enforcing` |
 

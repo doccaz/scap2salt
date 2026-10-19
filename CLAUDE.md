@@ -116,7 +116,7 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_audit` | `audit_rules_*`, `audit_*`, + rules using the `rules.d` macro (e.g. `directory_access_var_log_audit`) | `audit` |
 | `m_auditd_conf` | `auditd_*` (auditd.conf / audisp plugin `key = value`) | `audit` |
 | `m_pam` | PAM module-arg rules using CaC's `VALUES/VALUE_NAMES/ARGS` macro (cracklib pwquality, `pam_unix` hashing, `pam_wheel`) | `pam` |
-| `m_sudoers` | `sudo_*` with an `echo "Defaults …" >>` fix | `sudo` |
+| `m_sudoers` | `sudo_*` with an `echo "Defaults …" >>` fix (SLE16+: seeds `/etc/sudoers` from `/usr/etc/sudoers` and edits it in place; SLE15: `sudoers.d` drop-in) | `sudo` |
 | `m_coredump` | `coredump_*` (systemd `[Coredump]` key=value) | `coredump` |
 | `m_grub_audit` | `grub2_audit_*` (kernel cmdline args) | `grub` |
 | `m_securetty` | `no_direct_root_logins`, `securetty_root_login_console_only` | `lineinfile` |
@@ -130,6 +130,8 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_dconf` | `dconf_*` | `dconf` |
 | `m_aide` | `aide_build_database`, `aide_periodic_checking_systemd_timer` | `aide` |
 | `m_rpm` | `ensure_gpgcheck_*`, `ensure_suse_gpgkey_*`, `rpm_verify_*` | `rpm` |
+
+`selinux_state` is emitted as a `file.replace` on `/etc/selinux/config` plus a guarded `echo 1 > /sys/fs/selinux/enforce` (Salt's `selinux.mode` needs `semanage`/`setenforce`, absent on minimal SLE 16).
 
 `m_mac` is prepended to the front of MAPPERS (it must run before the generic `m_package` and `m_service` mappers that would otherwise partially handle SELinux/AppArmor package rules).
 

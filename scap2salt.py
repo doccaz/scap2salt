@@ -1177,6 +1177,27 @@ def m_sudoers(r):
     if not sm:
         return None
     line = shell_resolve(sm.group(1), bash)
+    if sshd_uses_dropin():
+        # usr-etc targets (SLE16+): CaC >= 0.1.82 checks /etc/sudoers itself
+        # (seeded from /usr/etc/sudoers) and wants the option absent from
+        # /etc/sudoers.d, so a drop-in no longer satisfies the OVAL. Seed the
+        # file, then set the option in place (or append it).
+        key = re.match(r"Defaults\s+([A-Za-z_]+)", line).group(1)
+        st = SaltState(
+            f"sudoers_{r.short}", "file.copy",
+            [("name", "/etc/sudoers"), ("source", "/usr/etc/sudoers"),
+             ("preserve", True)], "sudo", r)
+        st.extra_states = [
+            (f"sudoers_{r.short}_line", "file.replace",
+             [("name", "/etc/sudoers"),
+              ("pattern", rf"^[ \t]*Defaults\b[^\n]*\b{key}\b[^\n]*$"),
+              ("repl", line), ("append_if_not_found", True),
+              ("backup", False),
+              ("require", [f"file: sudoers_{r.short}"])]),
+            (f"sudoers_{r.short}_nodropin", "file.absent",
+             [("name", f"/etc/sudoers.d/99-pci-{r.short}")]),
+        ]
+        return st
     return SaltState(
         f"sudoers_{r.short}", "file.managed",
         [("name", f"/etc/sudoers.d/99-pci-{r.short}"),
@@ -1431,8 +1452,19 @@ def m_mac(r):
     if is_apparmor_rule:
         return "NA"
     if r.short == "selinux_state":
-        return SaltState("selinux_enforcing", "selinux.mode",
-                         [("name", "enforcing")], "mac", r)
+        # salt's selinux.mode state needs semanage/setenforce (policycoreutils-
+        # python-utils), absent on minimal SLE 16; set the persistent config and
+        # flip the live mode through sysfs instead.
+        st = SaltState("selinux_enforcing", "file.replace",
+                       [("name", "/etc/selinux/config"),
+                        ("pattern", "^SELINUX=.*$"),
+                        ("repl", "SELINUX=enforcing"),
+                        ("append_if_not_found", True)], "mac", r)
+        st.extra_states.append((
+            "selinux_enforcing_runtime", "cmd.run",
+            [("name", "echo 1 > /sys/fs/selinux/enforce"),
+             ("onlyif", 'test "$(cat /sys/fs/selinux/enforce 2>/dev/null)" = 0')]))
+        return st
     if r.short == "selinux_policytype":
         vals = re.findall(r'SELINUXTYPE=([A-Za-z0-9_]+)', r.bash or "")
         val = vals[-1] if vals else "targeted"

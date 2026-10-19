@@ -229,7 +229,7 @@ Each active rule is passed through an ordered list of **mappers**. The first map
 
 | Mapper | Recognises | Emits |
 |---|---|---|
-| `m_mac` | `selinux_*`, `apparmor_*`, `grub2_enable_selinux` | `selinux.mode`, `file.replace` on `/etc/default/grub`, or AppArmor equivalents |
+| `m_mac` | `selinux_*`, `apparmor_*`, `grub2_enable_selinux` | `file.replace` on `/etc/selinux/config` (+ a guarded sysfs switch to enforcing, since `selinux.mode` needs `semanage`), `file.replace` on `/etc/default/grub`, or AppArmor equivalents |
 | `m_sysctl` | `sysctl_*` | `sysctl.present` with a per-key drop-in under `/etc/sysctl.d/` |
 | `m_package` | `package_*_installed` / `*_removed` | `pkg.installed` / `pkg.removed` |
 | `m_service` | `service_*_enabled` / `*_disabled` | `service.running` / `service.dead` |
@@ -241,7 +241,7 @@ Each active rule is passed through an ordered list of **mappers**. The first map
 | `m_audit` | `audit_rules_*`, `audit_*`, plus rules built from the audit `rules.d` macro | `file.managed` writing per-rule fragments to `/etc/audit/rules.d/` (incl. `-e 2` immutable, `-F dir=` watches, `$var` watch paths); one `augenrules --load` triggered on any change |
 | `m_auditd_conf` | `auditd_*` | `file.replace` setting `key = value` in `/etc/audit/auditd.conf` (or the audisp syslog plugin); `service auditd restart` triggered on any change |
 | `m_pam` | PAM module-arg rules (cracklib pwquality, `pam_unix` hashing, `pam_wheel`) | guarded `cmd.run` that adds/updates one option on the `pam_*.so` line, preserving siblings (idempotent via `unless`) |
-| `m_sudoers` | `sudo_*` with a `Defaults …` fix | `file.managed` writing a `/etc/sudoers.d/99-pci-*` drop-in (mode `0440`) |
+| `m_sudoers` | `sudo_*` with a `Defaults …` fix | SLE 15: `file.managed` writing a `/etc/sudoers.d/99-pci-*` drop-in (mode `0440`). SLE 16+: seeds `/etc/sudoers` from `/usr/etc/sudoers` and sets the option there with `file.replace` (CaC ≥ 0.1.82 checks `/etc/sudoers` itself) |
 | `m_coredump` | `coredump_*` | `file.managed` writing a `[Coredump]` drop-in under `/etc/systemd/coredump.conf.d/` |
 | `m_grub_audit` | `grub2_audit_*` | `file.replace` adding the kernel arg to `GRUB_CMDLINE_LINUX`; `grub2-mkconfig` triggered on change |
 | `m_securetty` | `no_direct_root_logins`, `securetty_root_login_console_only` | `file.managed`/`file.replace` on `/etc/securetty` |
