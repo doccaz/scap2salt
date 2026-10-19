@@ -2566,7 +2566,8 @@ def emit_formula(outdir, meta, used_cats, mac, cat_pci=None):
                 "sshd_limit_user_access, which has no automatic fix because only you know who "
                 "may log in. Leave EMPTY for no restriction. WARNING: members of other groups, "
                 "including root, can no longer log in over SSH; include your admin and "
-                "management accounts. If none of the groups exist the highstate fails and "
+                "management accounts, and YOUR OWN login account (check with id that you belong to "
+                "one of these groups before saving, or you lock yourself out of new SSH sessions). If none of the groups exist the highstate fails and "
                 "nothing is restricted.\"",
                 "  sshd_allow_users:",
                 "    $type: text",
@@ -2574,7 +2575,8 @@ def emit_formula(outdir, meta, used_cats, mac, cat_pci=None):
                 "    $placeholder: admin1 admin2",
                 "    $name: 'SSH: only allow these USERS to log in [PCI 2.2.4, 2.2.6] (optional)'",
                 "    $help: \"Space-separated user names written as AllowUsers (alternative or "
-                "addition to the group list). Leave EMPTY for no restriction. Same WARNING as "
+                "addition to the group list). Leave EMPTY for no restriction. WARNING: list your own "
+                "login account too, or you lock yourself out of new SSH sessions. Same caveats as "
                 "the group list.\""]
     write(os.path.join(fdir, "form.yml"), "\n".join(form) + "\n")
 
@@ -2800,7 +2802,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.14", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.15", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -3029,8 +3031,8 @@ def main():
                          "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.14",
-                    help="Version for the formula RPM (default: 1.0.14)")
+    ap.add_argument("--pkg-version", default="1.0.15",
+                    help="Version for the formula RPM (default: 1.0.15)")
     args = ap.parse_args()
 
     CONFIG["target"] = args.target
