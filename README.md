@@ -141,6 +141,15 @@ chooses package integrity. The same notice is generated into the formula's
 `README.md`, `coverage-report.md` and the MLM form's help text (see
 `BY_DESIGN_FAILURES` in `scap2salt.py`).
 
+> **Scan with matching content.** An `oscap` scan uses whatever datastream it is given, and MLM's own
+> compliance scans use the `scap-security-guide` package installed on the minion, which on SLE 16 is the
+> distro build (0.1.80 at the time of writing), older than the upstream release this tool generates from
+> (see `CAC_RELEASE`). The checks differ: 0.1.80 expects `auth required pam_unix.so ... sha512`
+> where 0.1.82 expects `auth sufficient ...`, and it fails `audit_rules_login_events_faillock` even with
+> the rule loaded. So `set_password_hashing_algorithm_commonauth` and `audit_rules_login_events_faillock`
+> can show red in MLM although the host satisfies the upstream rules. For a like-for-like result, scan
+> with the same `ssg-sle16-ds.xml` the states were generated from (`--datastream`/`.cache/`).
+
 > Not a deviation, but worth knowing: `sshd_disable_root_login` can still report
 > *fail* if the host carries a separate drop-in (e.g. `/etc/ssh/sshd_config.d/root.conf`)
 > with `PermitRootLogin yes`. scap2salt's `00-pci-hardening.conf` sorts first so
