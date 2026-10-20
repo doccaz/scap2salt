@@ -15,6 +15,7 @@ import hashlib
 import io
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -1196,6 +1197,18 @@ grep -qE '^\s*auth\s+\[default=die\]\s+pam_faillock\.so\s+authfail' $a || sed -i
 grep -qE '^\s*auth\s+sufficient\s+pam_faillock\.so\s+authsucc' $a || sed -i --follow-symlinks '/^auth.*pam_faillock\.so.*authfail.*/a auth        sufficient      pam_faillock.so authsucc' $a
 grep -qE '^\s*account\s+required\s+pam_faillock\.so' $c || sed -i --follow-symlinks '/^account.*required.*pam_unix\.so.*/i account   required     pam_faillock.so' $c
 grep -qE '^\s*auth\s+sufficient\s+pam_unix\.so' $a || if [ "$(grep -cE '^\s*auth\s+\S+\s+pam_unix\.so' $a)" = 1 ]; then sed -i -E --follow-symlinks 's/^(\s*auth\s+)\S+(\s+pam_unix\.so)/\1sufficient\2/' $a; fi"""
+# The stack is only ever applied to a common-auth with at most ONE pam_unix auth
+# line: the insert seds match every pam_unix line, so a leftover second line (from
+# an older scap2salt or a hand edit) would get the whole faillock stack twice and
+# count each failed login twice. _FAILLOCK_DUP detects that (or an already doubled
+# stack) so the faillock_pam_stack_check state can fail loudly instead.
+_FAILLOCK_SINGLE = (r"""test "$(grep -cE '^\s*auth\s+\S+\s+pam_unix\.so' /etc/pam.d/common-auth)" -le 1""")
+_FAILLOCK_DUP = (r"""test "$(grep -cE '^\s*auth\s+\S+\s+pam_unix\.so' /etc/pam.d/common-auth)" -gt 1 """
+                 r"""|| test "$(grep -cE '^\s*auth\s+required\s+pam_faillock\.so\s+preauth' /etc/pam.d/common-auth)" -gt 1""")
+_FAILLOCK_DUP_MSG = ("scap2salt: /etc/pam.d/common-auth has more than one pam_unix auth line or a duplicated "
+                     "pam_faillock stack (left by an older run or a manual edit). Not touching it: restore a "
+                     "single clean stack (e.g. cp /usr/etc/pam.d/common-auth-pc or re-run pam-config), then "
+                     "re-run the highstate.")
 _FAILLOCK_UNLESS = (r"""a=/etc/pam.d/common-auth; grep -qE '^\s*auth\s+required\s+pam_faillock\.so\s+preauth' $a """
                     r"""&& grep -qE '^\s*auth\s+\[default=die\]\s+pam_faillock\.so\s+authfail' $a """
                     r"""&& grep -qE '^\s*auth\s+sufficient\s+pam_faillock\.so\s+authsucc' $a """
@@ -1232,8 +1245,16 @@ def m_faillock(r):
             "faillock_pam_stack", "cmd.run",
             [("name", _FAILLOCK_STACK),
              ("onlyif", ["test -e /usr/lib64/security/pam_faillock.so",
-                         "! grep -qE 'success=[1-9].*pam_unix' /etc/pam.d/common-auth"]),
+                         "! grep -qE 'success=[1-9].*pam_unix' /etc/pam.d/common-auth",
+                         _FAILLOCK_SINGLE]),
              ("unless", _FAILLOCK_UNLESS),
+             ("require", ["file: faillock_deny"])]))
+        seed.extra_states.append((
+            "faillock_pam_stack_check", "cmd.run",
+            [("name", f"echo {shlex.quote(_FAILLOCK_DUP_MSG)}; exit 1"),
+             ("onlyif", ["test -e /usr/lib64/security/pam_faillock.so",
+                         "! grep -qE 'success=[1-9].*pam_unix' /etc/pam.d/common-auth",
+                         _FAILLOCK_DUP]),
              ("require", ["file: faillock_deny"])]))
     return seed
 
@@ -2797,7 +2818,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.15", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.16", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -3026,8 +3047,8 @@ def main():
                          "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.15",
-                    help="Version for the formula RPM (default: 1.0.15)")
+    ap.add_argument("--pkg-version", default="1.0.16",
+                    help="Version for the formula RPM (default: 1.0.16)")
     args = ap.parse_args()
 
     CONFIG["target"] = args.target
