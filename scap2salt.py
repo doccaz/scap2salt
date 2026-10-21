@@ -2206,8 +2206,26 @@ def sshd_extra_block(target, state_ids):
             "    - unless: {{ (" + chk + ") | tojson }}\n"
             "{%- endif %}\n")
     san = "regex_replace('[^A-Za-z0-9_.@ -]', '')"
+    shadow = ""
+    if sshd_uses_dropin():
+        # SLE16+ ships sshd_config in /usr/etc. A leftover /etc/ssh/sshd_config
+        # (stale sample, empty file, ...) without an Include for sshd_config.d is
+        # read INSTEAD of the vendor file and disables every drop-in, including this
+        # formula's hardening, while the file-based oscap checks still pass. Fail
+        # loudly rather than silently leaving sshd unhardened.
+        msg = ("scap2salt: /etc/ssh/sshd_config exists without an Include for sshd_config.d, so sshd "
+               "ignores the vendor config and ALL drop-ins, including this formula's SSH hardening. "
+               "Move it aside (mv /etc/ssh/sshd_config /etc/ssh/sshd_config.orig), review any custom "
+               "settings in it, then re-run the highstate.")
+        shadow = (
+            "\n# A stale /etc/ssh/sshd_config would shadow the vendor config and every drop-in.\n"
+            "sshd_config_shadow_check:\n  cmd.run:\n"
+            f"    - name: {yaml_scalar('echo ' + shlex.quote(msg) + ' >&2; exit 1')}\n"
+            "    - onlyif: \"test -e /etc/ssh/sshd_config && ! grep -qiE "
+            "'^[[:space:]]*Include[[:space:]].*sshd_config\\\\.d' /etc/ssh/sshd_config\"\n")
     return (
-        "\n# Optional SSH allow-lists (satisfy sshd_limit_user_access). Leave empty for\n"
+        shadow
+        + "\n# Optional SSH allow-lists (satisfy sshd_limit_user_access). Leave empty for\n"
         "# unrestricted logins; enter space-separated names in the MLM form.\n"
         "{%- set sshd_ag = ((p.get('sshd_allow_groups', '') or '') | string | " + san + ").strip() %}\n"
         "{%- set sshd_au = ((p.get('sshd_allow_users', '') or '') | string | " + san + ").strip() %}\n"
@@ -2889,7 +2907,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.17", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.18", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -3118,8 +3136,8 @@ def main():
                          "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.17",
-                    help="Version for the formula RPM (default: 1.0.17)")
+    ap.add_argument("--pkg-version", default="1.0.18",
+                    help="Version for the formula RPM (default: 1.0.18)")
     args = ap.parse_args()
 
     CONFIG["target"] = args.target
