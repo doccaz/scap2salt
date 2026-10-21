@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-10-21T13:33:55+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
+Generated 2026-10-21T17:19:51+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -268,6 +268,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 
 | Rule | Sev | PCI-DSS | Action |
 |---|---|---|---|
+| `dconf_db_up_to_date`<br><sub>Make sure that the dconf databases are up-to-date with regards to respective keyfiles</sub> | high | Req-6.2, 8.2.8, 8.2 | operational cmd: `umask 0022 && dconf update` |
 | `dconf_gnome_disable_automount`<br><sub>Disable GNOME3 Automounting</sub> | medium | 3.4.2, 3.4 | manage `/etc/dconf/db/gdm.d/00-pci-dconf_gnome_disable_automount` (mode 0644) |
 | `dconf_gnome_disable_automount_open`<br><sub>Disable GNOME3 Automount Opening</sub> | medium | 3.4.2, 3.4 | manage `/etc/dconf/db/gdm.d/00-pci-dconf_gnome_disable_automount_open` (mode 0644) |
 | `dconf_gnome_screensaver_idle_activation_enabled`<br><sub>Enable GNOME3 Screensaver Idle Activation</sub> | medium | Req-8.1.8, 8.2.8, 8.2 | manage `/etc/dconf/db/gdm.d/00-pci-dconf_gnome_screensaver_idle_activation_enabled` (mode 0644) |
@@ -275,6 +276,8 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `dconf_gnome_screensaver_lock_delay`<br><sub>Set GNOME3 Screensaver Lock Delay After Activation Period</sub> | medium | Req-8.1.8, 8.2.8, 8.2 | manage `/etc/dconf/db/gdm.d/00-pci-dconf_gnome_screensaver_lock_delay` (mode 0644) |
 | `dconf_gnome_screensaver_lock_enabled`<br><sub>Enable GNOME3 Screensaver Lock After Idle Period</sub> | medium | Req-8.1.8, 8.2.8, 8.2 | manage `/etc/dconf/db/gdm.d/00-pci-dconf_gnome_screensaver_lock_enabled` (mode 0644) |
 | `dconf_gnome_screensaver_mode_blank`<br><sub>Implement Blank Screensaver</sub> | medium | Req-8.1.8, 8.2.8, 8.2 | manage `/etc/dconf/db/gdm.d/00-pci-dconf_gnome_screensaver_mode_blank` (mode 0644) |
+| `dconf_gnome_session_idle_user_locks`<br><sub>Ensure Users Cannot Change GNOME3 Session Idle Settings</sub> | medium | Req-8.1.8, 8.2.8, 8.2 | manage `/etc/dconf/db/gdm.d/locks/00-pci-dconf_gnome_session_idle_user_locks` (mode 0644) |
+| `enable_dconf_user_profile`<br><sub>Configure GNOME3 DConf User Profile</sub> | high | 8.2.8, 8.2 | operational cmd: `mkdir -p /etc/dconf/profile /etc/dconf/db/gdm.d; chmod 0755 /etc/dconf/profile /etc/dco…` |
 
 ## Systemd core dump policy (`coredump`)
 

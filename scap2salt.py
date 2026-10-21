@@ -981,6 +981,11 @@ def m_dconf(r):
     if not (fm and pm and vm and km):
         return None
     dconffile, path, value, key = fm.group(1), pm.group(1), vm.group(1), km.group(1).strip()
+    # CaC writes the sed append as `|a\\key=...` (escaped backslash): the capture keeps
+    # one leading backslash, which would make an invalid dconf key. The value may
+    # still reference the rule's in-script variable (e.g. ${inactivity_timeout_value}).
+    key = key.lstrip("\\")
+    value = shell_resolve(value, bash)
     dbdir = os.path.dirname(dconffile)
     settings = f"{dbdir}/00-pci-{r.short}"
     sid = f"dconf_set_{r.short}"
@@ -1001,6 +1006,53 @@ def m_dconf(r):
              ("mode", "0644"), ("contents", [lm.group(1)])],
         ))
     return st
+
+
+# gdm is the only dconf consumer the SSG fixes touch; every rule below is a no-op
+# on hosts without it, exactly like the upstream `rpm -q gdm` platform check.
+_GDM = "rpm --quiet -q gdm"
+_DCONF_PROFILE_OK = (r"""grep -Pzq '(?s)^\s*user-db:user.*\n\s*system-db:gdm' /etc/dconf/profile/gdm 2>/dev/null """
+                     r"""&& test -d /etc/dconf/db/gdm.d""")
+
+
+@mapper
+def m_dconf_profile(r):
+    """enable_dconf_user_profile, dconf_db_up_to_date, dconf_gnome_session_idle_user_locks:
+    the dconf plumbing the other dconf rules' OVAL checks depend on. Guarded on
+    gdm being installed (the upstream platform check)."""
+    sh = r.short
+    if sh == "enable_dconf_user_profile":
+        cmd = ("mkdir -p /etc/dconf/profile /etc/dconf/db/gdm.d; chmod 0755 /etc/dconf/profile /etc/dconf/db/gdm.d; "
+               "p=/etc/dconf/profile/gdm; [ -s $p ] || echo > $p; chmod 0644 $p; "
+               "grep -Pzq '(?s)^\\s*user-db:user.*\\n\\s*system-db:gdm' $p "
+               "|| sed -i --follow-symlinks '1s/^/user-db:user\\nsystem-db:gdm\\n/' $p; "
+               "chmod -R u=rwX,go=rX /etc/dconf/profile; "
+               "if command -v dconf >/dev/null; then (umask 0022 && dconf update); fi")
+        st = SaltState(
+            "dconf_user_profile_gdm", "cmd.run",
+            [("name", cmd), ("onlyif", _GDM), ("unless", _DCONF_PROFILE_OK)], "dconf", r)
+        st.operational = True
+        return st
+    if sh == "dconf_db_up_to_date":
+        # Final sweep: recompile when the gdm database is missing or older than any
+        # key file. `order: last` keeps it after every fragment/lock state.
+        stale = ("command -v dconf >/dev/null && { test ! -e /etc/dconf/db/gdm "
+                 "|| find /etc/dconf/db/gdm.d -type f -newer /etc/dconf/db/gdm | grep -q .; }")
+        st = SaltState(
+            "dconf_db_up_to_date", "cmd.run",
+            [("name", "umask 0022 && dconf update"), ("onlyif", [_GDM, stale]), ("order", "last")],
+            "dconf", r)
+        st.operational = True
+        return st
+    if sh == "dconf_gnome_session_idle_user_locks":
+        st = SaltState(
+            "dconf_lock_session_idle_delay", "file.managed",
+            [("name", "/etc/dconf/db/gdm.d/locks/00-pci-dconf_gnome_session_idle_user_locks"),
+             ("makedirs", True), ("mode", "0644"),
+             ("contents", ["/org/gnome/desktop/session/idle-delay"])], "dconf", r)
+        st.dconf_reload = True
+        return st
+    return None
 
 
 AIDE_SERVICE = ("[Unit]\nDescription=Aide Check\n\n[Service]\nType=simple\n"
@@ -2926,7 +2978,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.19", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.20", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -3155,8 +3207,8 @@ def main():
                          "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.19",
-                    help="Version for the formula RPM (default: 1.0.19)")
+    ap.add_argument("--pkg-version", default="1.0.20",
+                    help="Version for the formula RPM (default: 1.0.20)")
     args = ap.parse_args()
 
     CONFIG["target"] = args.target

@@ -70,9 +70,9 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | **Remediable** (coverage denominator) | **238** | **230** |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **223 / 238 — 93%** | **217 / 230 — 94%** |
-| Guarded operational states | 29 | 24 |
-| Remediable rules still unmapped | 15 | 13 |
+| **Native coverage** | **226 / 238 — 94%** | **220 / 230 — 95%** |
+| Guarded operational states | 31 | 26 |
+| Remediable rules still unmapped | 12 | 10 |
 
 Coverage by category:
 
@@ -85,7 +85,7 @@ Coverage by category:
 | Config-file settings (login.defs, securetty, etc.) | 13 | 12 |
 | Kernel parameters (sysctl) | 12 | 12 |
 | Service enable / disable | 8 | 8 |
-| GNOME desktop (dconf) policy | 7 | 7 |
+| GNOME desktop (dconf) policy | 10 | 10 |
 | PAM & account hygiene (pwquality, pam_unix, pam_wheel, faillock*, nullok) | 10 | 12 |
 | Opt-in account hardening (password aging, sudo re-auth, extra UID 0, empty passwords, system shells) | 7 | 7 |
 | Package signatures & verification (RPM/GPG) | 5 | 4 |
@@ -108,7 +108,7 @@ Coverage by category:
 | SLE 16 (SELinux), clean-ish VM | 220 | 9 | 96% | the shared list below, plus the two [by-design SLE 16 rules](#sle-16-rules-that-fail-a-scan-by-design) |
 | SLE 16 (SELinux), long-lived lab VM | 217 | 12 | 95% | as above, plus 3 filesystem-hygiene findings specific to that VM (world-writable file, unowned/ungrouped files) |
 
-Shared across hosts: `display_login_attempts` (upstream fix is a no-op on SUSE), `ensure_firewall_rules_for_open_ports` and `set_firewalld_default_zone` (site-specific, no upstream fix), and the opt-in `sudo_require_authentication` and `accounts_password_set_max_life_existing`. `sshd_limit_user_access` stays red until you fill the SSH allow-list fields. SLE 16 also shows `selinux_confinement_of_daemons`, which cannot be satisfied on a stock install. A further 15-20 rules per host are not applicable and 2-3 are not checked.
+Shared across hosts: `display_login_attempts` (upstream fix is a no-op on SUSE), `ensure_firewall_rules_for_open_ports` and `set_firewalld_default_zone` (site-specific, no upstream fix), and the opt-in `sudo_require_authentication` and `accounts_password_set_max_life_existing`. `sshd_limit_user_access` stays red until you fill the SSH allow-list fields. SLE 16 also shows `selinux_confinement_of_daemons`, which cannot be satisfied on a stock install. A further 15-20 rules per host are not applicable and 2-3 are not checked. The `dconf_*` (GNOME) rules only apply where `gdm` is installed, so the headless lab VMs do not exercise them; they were measured with formula 1.0.19, before the three dconf rules were added.
 
 Regenerate these numbers any time with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`.
 

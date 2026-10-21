@@ -25,9 +25,9 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | Remediable (coverage denominator) | 238 | 230 |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **223/238 — 93%** | **217/230 — 94%** |
-| Guarded operational states | 29 | 24 |
-| Remediable rules still unmapped | 15 | 13 |
+| **Native coverage** | **226/238 — 94%** | **220/230 — 95%** |
+| Guarded operational states | 31 | 26 |
+| Remediable rules still unmapped | 12 | 10 |
 
 Regenerate with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`. Keep these numbers in sync with the README's "Current coverage" section when handlers change.
 
@@ -132,6 +132,7 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_timer` | `timer_*_enabled` (systemd `.timer`) | `services` |
 | `m_limits` | `disable_users_coredumps` (`/etc/security/limits.d/`) | `limits` |
 | `m_dconf` | `dconf_*` | `dconf` |
+| `m_dconf_profile` | `enable_dconf_user_profile` (`/etc/dconf/profile/gdm`), `dconf_db_up_to_date` (final `dconf update`, `order: last`), `dconf_gnome_session_idle_user_locks` (lock fragment) — all no-ops unless `gdm` is installed | `dconf` |
 | `m_aide` | `aide_build_database`, `aide_periodic_checking_systemd_timer` | `aide` |
 | `m_rpm` | `ensure_gpgcheck_*`, `ensure_suse_gpgkey_*`, `rpm_verify_*` | `rpm` |
 

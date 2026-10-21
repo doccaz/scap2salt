@@ -89,7 +89,7 @@ PCI_DSS_v4_SLE16:
   dconf:
     $type: boolean
     $default: True
-    $name: "GNOME desktop (dconf) policy [PCI 3.4, 8.1, 8.2] — GNOME screen-lock / autorun policy"
+    $name: "GNOME desktop (dconf) policy [PCI 3.4, 6.2, 8.1, 8.2] — GNOME screen-lock / autorun policy"
     $help: "PCI-DSS §8.6.1 — Enforces GNOME desktop policy via /etc/dconf/db/ fragments. Locks screen on idle (idle-delay, idle-activation-enabled), disables autorun, enforces screensaver lock, and restricts removable media automount."
   coredump:
     $type: boolean

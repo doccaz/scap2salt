@@ -3,10 +3,10 @@
 Source datastream: `ssg-sle16-ds.xml`
 Profile: `xccdf_org.ssgproject.content_profile_pci-dss-4`
 MAC framework: `selinux`
-Generated: 2026-10-21T13:33:55+00:00
+Generated: 2026-10-21T17:19:51+00:00
 
-Coverage: **217/230** remediable rules mapped to native Salt (94%).
-13 unmapped (`UNMAPPED.md`); 16 ship no remediation (`NO_REMEDIATION.md`); 1 not applicable to this MAC (`SKIPPED_NA.md`).
+Coverage: **220/230** remediable rules mapped to native Salt (96%).
+10 unmapped (`UNMAPPED.md`); 16 ship no remediation (`NO_REMEDIATION.md`); 1 not applicable to this MAC (`SKIPPED_NA.md`).
 
 ## Layout
 - `init.sls` — includes every category below
