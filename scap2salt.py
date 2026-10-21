@@ -1209,7 +1209,13 @@ def m_pam(r):
     bare = [a for a in newargs if a]
     if not opts and not bare:
         return None
-    return _pam_option_state(r, pam_file, ltype, ctrl, mod, opts, bare)
+    st = _pam_option_state(r, pam_file, ltype, ctrl, mod, opts, bare)
+    if pam_file == "/etc/pam.d/su" and mod == "wheel":
+        # `su -` runs the su-l service, which the CaC rule does not touch: without the same
+        # restriction there the su limit is trivially bypassed. Same fix, same safeguards.
+        st2 = _pam_option_state(r, "/etc/pam.d/su-l", ltype, ctrl, mod, opts, bare)
+        st.extra_states.append((st2.id.replace("pam_wheel_", "pam_wheel_su_l_", 1), "cmd.run", st2.args))
+    return st
 
 
 def _pam_option_state(r, pam_file, ltype, ctrl, mod, opts, bare):
@@ -1263,14 +1269,14 @@ def _pam_option_state(r, pam_file, ltype, ctrl, mod, opts, bare):
         amend(name_suffix=f'; grep -qE "{deny}" "$f" || {{ ' + nl
                           + 'echo "auth    required        pam_deny.so" >> "$f"; }',
               unless_and=f' && grep -qE "{deny}" "$f"')
-    if pam_file == "/etc/pam.d/su" and mod == "wheel" and ltype == "auth":
+    if pam_file in ("/etc/pam.d/su", "/etc/pam.d/su-l") and mod == "wheel" and ltype == "auth":
         # (1) On usr-etc targets /etc/pam.d/su does not exist: appending the wheel line would
         # create a file with ONLY that line, shadowing the vendor su stack and breaking su
         # for everybody. Seed it from the vendor copy first (also repairs such a file).
         # (2) The wheel check must run BEFORE `auth include common-auth`: with a
         # `sufficient pam_unix` in there a correct password ends the stack and a later
         # pam_wheel line is never evaluated, i.e. the restriction is silently ignored.
-        v = "/usr/lib/pam.d/su"
+        v = "/usr/lib/pam.d/" + os.path.basename(pam_file)
         seed = (f"f={pam_file}; if [ -e {v} ] && ! grep -q common-auth {pam_file} 2>/dev/null; "
                 f"then cp {v} {pam_file}; fi; ")
         reorder = ('; w=$(grep -m1 -E "^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_wheel\\.so" "$f"); '

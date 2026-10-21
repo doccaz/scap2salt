@@ -1,6 +1,6 @@
 # Unmapped rules — xccdf_org.ssgproject.content_profile_pci-dss-4
 
-Generated 2026-10-21T19:12:00+00:00 from `ssg-sle15-ds.xml`.
+Generated 2026-10-21T19:40:17+00:00 from `ssg-sle15-ds.xml`.
 
 7 selected rule(s) have **no native Salt handler** and were skipped (native-only mode). Add a mapper in `scap2salt.py` or handle these via a separate reviewed state.
 
