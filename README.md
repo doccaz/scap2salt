@@ -100,7 +100,7 @@ Coverage by category:
 
 ### Measured results on lab hosts
 
-`oscap xccdf eval` with the `pci-dss-4` profile, using the same CaC v0.1.82 datastream the states were generated from, after a clean highstate of the current formula (1.0.18) on lab VMs (Oct 2026):
+`oscap xccdf eval` with the `pci-dss-4` profile, using the same CaC v0.1.82 datastream the states were generated from, after a clean highstate of the current formula (1.0.19) on lab VMs (Oct 2026):
 
 | Host | Pass | Fail | Pass rate (pass / pass+fail) | Remaining failures |
 |---|---|---|---|---|
