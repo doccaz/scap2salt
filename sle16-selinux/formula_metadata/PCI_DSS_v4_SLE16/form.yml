@@ -50,17 +50,25 @@ PCI_DSS_v4_SLE16:
     $name: "SSH server hardening [PCI 2.2, 2.3, 8.1, 8.2] — harden sshd_config.d"
     $help: "PCI-DSS §2.2.4, §2.2.7, §8.3.1 — Hardens /etc/ssh/sshd_config.d/. Disables root login and empty passwords, restricts FIPS-validated ciphers/MACs/KexAlgorithms, sets idle timeout (ClientAliveInterval / CountMax), disables X11 and TCP forwarding, enables PAM."
   sshd_allow_groups:
-    $type: text
-    $default: ''
-    $placeholder: users wheel
+    $type: edit-group
+    $minItems: 0
+    $itemName: 'Group ${i}'
     $name: 'SSH: only allow these GROUPS to log in [PCI 2.2.4, 2.2.6] (optional)'
-    $help: "Space-separated group names written as AllowGroups. Satisfies sshd_limit_user_access, which has no automatic fix because only you know who may log in. Leave EMPTY for no restriction. WARNING: members of other groups, including root, can no longer log in over SSH; include your admin and management accounts, and YOUR OWN login account (check with id that you belong to one of these groups before saving, or you lock yourself out of new SSH sessions). If none of the groups exist the highstate fails and nothing is restricted."
+    $help: "One group per row, written as AllowGroups. Satisfies sshd_limit_user_access, which has no automatic fix because only you know who may log in. Leave the list EMPTY for no restriction. WARNING: members of other groups, including root, can no longer log in over SSH; include your admin and management accounts, and the group of YOUR OWN login account (check with id). The highstate refuses to apply a list that would exclude somebody who is logged in right now, and fails (restricting nothing) if none of the groups exist."
+    $prototype:
+      $type: text
+      $name: 'Group name'
+      $placeholder: wheel
   sshd_allow_users:
-    $type: text
-    $default: ''
-    $placeholder: admin1 admin2
+    $type: edit-group
+    $minItems: 0
+    $itemName: 'User ${i}'
     $name: 'SSH: only allow these USERS to log in [PCI 2.2.4, 2.2.6] (optional)'
-    $help: "Space-separated user names written as AllowUsers (alternative or addition to the group list). Leave EMPTY for no restriction. WARNING: list your own login account too, or you lock yourself out of new SSH sessions. Same caveats as the group list."
+    $help: "One user per row, written as AllowUsers (alternative or addition to the group list; when both are set a user must match both). Leave the list EMPTY for no restriction. WARNING: list your own login account too, or you lock yourself out of new SSH sessions. Same safeguards as the group list."
+    $prototype:
+      $type: text
+      $name: 'User name'
+      $placeholder: admin1
   lineinfile:
     $type: boolean
     $default: True

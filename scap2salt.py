@@ -1209,6 +1209,12 @@ def m_pam(r):
     bare = [a for a in newargs if a]
     if not opts and not bare:
         return None
+    return _pam_option_state(r, pam_file, ltype, ctrl, mod, opts, bare)
+
+
+def _pam_option_state(r, pam_file, ltype, ctrl, mod, opts, bare):
+    """Idempotent cmd.run that ensures `<ltype> <ctrl> pam_<mod>.so` exists in pam_file
+    and carries each option/flag, leaving sibling options intact."""
     base = f"{ltype} {ctrl} pam_{mod}.so"
     # Build a faithful, idempotent shell remediation (no declarative PAM primitive
     # exists in core Salt): ensure the module line exists, then ensure each option.
@@ -1238,6 +1244,45 @@ def m_pam(r):
         "pam", r,
     )
     st.operational = True
+
+    def amend(name_suffix="", name_prefix="", unless_and=""):
+        args = dict(st.args)
+        st.args = [("name", name_prefix + args["name"] + name_suffix),
+                   ("unless", args["unless"] + unless_and)] + [(k, v) for k, v in st.args
+                                                                if k not in ("name", "unless")]
+
+    if pam_file == "/etc/pam.d/common-auth" and mod == "unix" and ltype == "auth" and ctrl == "sufficient" \
+            and not sshd_uses_dropin():
+        # CaC turns `required pam_unix` into `sufficient`, which is only safe when something
+        # after it fails the stack: faillock's `[default=die] authfail` on SLE 16, but
+        # nothing on SLE 15, where ANY `required` module that succeeds elsewhere in the
+        # stack (e.g. pam_tally2) would make a wrong password succeed. Close the stack
+        # with the standard `auth required pam_deny.so`.
+        deny = r'^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_deny\.so'
+        nl = r"""sed -i -e '$a\' "$f"; """          # make sure the file ends with a newline
+        amend(name_suffix=f'; grep -qE "{deny}" "$f" || {{ ' + nl
+                          + 'echo "auth    required        pam_deny.so" >> "$f"; }',
+              unless_and=f' && grep -qE "{deny}" "$f"')
+    if pam_file == "/etc/pam.d/su" and mod == "wheel" and ltype == "auth":
+        # (1) On usr-etc targets /etc/pam.d/su does not exist: appending the wheel line would
+        # create a file with ONLY that line, shadowing the vendor su stack and breaking su
+        # for everybody. Seed it from the vendor copy first (also repairs such a file).
+        # (2) The wheel check must run BEFORE `auth include common-auth`: with a
+        # `sufficient pam_unix` in there a correct password ends the stack and a later
+        # pam_wheel line is never evaluated, i.e. the restriction is silently ignored.
+        v = "/usr/lib/pam.d/su"
+        seed = (f"f={pam_file}; if [ -e {v} ] && ! grep -q common-auth {pam_file} 2>/dev/null; "
+                f"then cp {v} {pam_file}; fi; ")
+        reorder = ('; w=$(grep -m1 -E "^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_wheel\\.so" "$f"); '
+                   'if [ -n "$w" ] && grep -qE "^[[:space:]]*auth[[:space:]]+(include|substack)[[:space:]]+common-auth" "$f"; then '
+                   'awk -v w="$w" \'/^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_wheel\\.so/{next} '
+                   '!d && /^[[:space:]]*auth[[:space:]]+(include|substack)[[:space:]]+common-auth/{print w; d=1} {print}\' '
+                   '"$f" > "$f.s2s" && cat "$f.s2s" > "$f"; rm -f "$f.s2s"; fi')
+        order_ok = (' && awk \'/^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_wheel\\.so/ && !w {w=NR} '
+                    '/^[[:space:]]*auth[[:space:]]+(include|substack)[[:space:]]+common-auth/ && !i {i=NR} '
+                    'END{exit !(w && (!i || w<i))}\' "$f"'
+                    f' && ! {{ [ -e {v} ] && ! grep -q common-auth "$f"; }}')
+        amend(name_prefix=seed, name_suffix=reorder, unless_and=order_ok)
     if pam_file == "/etc/pam.d/common-auth" and mod == "unix" and ltype == "auth":
         # A second pam_unix auth line (older scap2salt run, hand edit) would make the
         # converge logic above append yet another line and, once satisfied, hide the
@@ -1253,6 +1298,34 @@ def m_pam(r):
 
 
 @mapper
+def m_tally2(r):
+    """accounts_passwords_pam_tally2{,_unlock_time} (SLE 15 only: PAM 1.3.0 has
+    pam_tally2, SLE 16+ uses pam_faillock instead): the failed-login counter on
+    console logins (/etc/pam.d/login) plus the matching `account` line in
+    common-account that resets the counter after a successful login."""
+    m = re.match(r"^accounts_passwords_pam_tally2(_unlock_time)?$", r.short)
+    if not m or sshd_uses_dropin():
+        return None
+    unlock = bool(m.group(1))
+    vm = re.search(r"^var_(?:password_pam_tally2|accounts_passwords_pam_tally2_unlock_time)='([^']+)'",
+                   r.bash or "", re.M)
+    if not vm:
+        return None
+    opts = [("unlock_time", vm.group(1))] if unlock else [("onerr", "fail"), ("deny", vm.group(1))]
+    st = _pam_option_state(r, "/etc/pam.d/login", "auth", "required", "tally2", opts, [])
+    if not unlock:
+        f = "/etc/pam.d/common-account"
+        ensure = (f'f={f}; if [ "$(grep -cP "^\\s*account\\s+.*\\s+pam_tally2\\.so" $f)" -eq 1 ]; '
+                  f'then sed -i -E --follow-symlinks "s/^(\\s*account\\s+).*(\\bpam_tally2\\.so.*)/\\1required \\2/" $f; '
+                  f'else echo "account    required    pam_tally2.so" >> $f; fi')
+        st.extra_states.append((
+            "pam_tally2_account", "cmd.run",
+            [("name", ensure),
+             ("unless", f'grep -qP "^\\s*account\\s+required\\s+pam_tally2\\.so" {f}')]))
+    return st
+
+
+@mapper
 def _m_pam(r):
     return m_pam(r)
 
@@ -1260,6 +1333,17 @@ def _m_pam(r):
 # auditd.conf log_group, defaulting to root: the group the audit log files must carry.
 _AUDIT_GROUP = ("G=$(awk -F= '/^log_group/ {gsub(/ /,\"\",$2); print $2}' /etc/audit/auditd.conf 2>/dev/null); "
                 "[ -n \"$G\" ] || G=root")
+
+
+# Log files rsyslog writes: legacy selector lines ("*.* /var/log/x", "-/var/log/x") and
+# RainerScript action(type="omfile" file="..."), read from rsyslog.conf and rsyslog.d/*.conf
+# (a compact version of the path discovery the three upstream rsyslog_files_* fixes share).
+_RSYSLOG_FN = (
+    r"""rl() { for c in /etc/rsyslog.conf /etc/rsyslog.d/*.conf; do [ -f "$c" ] || continue; """
+    r"""sed -e '/^[#|$]/d' "$c" | awk '{if(NF>=2&&($NF~/^\//||$NF~/^-\//)){sub(/^-\//,"/",$NF);print $NF}}'; """
+    r"""grep -iozP 'action\s*\(\s*type\s*=\s*"omfile"[^)]*\)' "$c" 2>/dev/null | tr '\0' '\n' """
+    r"""| grep -iaoP '\bFile\s*=\s*"[^"]+"' | cut -d'"' -f2; done """
+    r"""| sed -e "s/[\"')]//g" | grep -v -e '/etc.*\.conf' -e '^/dev/' | sort -u; }""")
 
 
 @mapper
@@ -1297,6 +1381,24 @@ def m_file_hygiene(r):
                   "find /var/log/audit -maxdepth 1 -type f -name 'audit.log*' -exec chown root:$G {} +",
                   _AUDIT_GROUP + "; find /var/log/audit -maxdepth 1 \\( -type d -o -name 'audit.log*' \\) "
                   "\\( ! -user root -o ! -group $G \\) | grep -q .", "permissions")
+    if sh in ("rsyslog_files_ownership", "rsyslog_files_groupownership", "rsyslog_files_permissions"):
+        # Only ever tighten: ownership to root, mode with a relative chmod (the upstream
+        # fix sets 0640, which would loosen a 0600 log). Missing/non-file paths are skipped.
+        if sh == "rsyslog_files_ownership":
+            sid, act, bad = "rsyslog_log_ownership", 'chown root "$f"', '[ "$(stat -c %U "$f")" != root ]'
+        elif sh == "rsyslog_files_groupownership":
+            sid, act, bad = "rsyslog_log_groupownership", 'chgrp root "$f"', '[ "$(stat -c %G "$f")" != root ]'
+        else:
+            sid, act = "rsyslog_log_permissions", 'chmod u-xs,g-xws,o-xwrt "$f"'
+            bad = '[ -n "$(find "$f" -maxdepth 0 -perm /7137)" ]'
+        st = SaltState(
+            sid, "cmd.run",
+            [("name", _RSYSLOG_FN + '; rl | while read -r f; do [ -f "$f" ] && ' + act + '; done; true'),
+             ("onlyif", ["rpm --quiet -q rsyslog",
+                         _RSYSLOG_FN + '; test -n "$(rl | while read -r f; do [ -f "$f" ] && ' + bad
+                         + ' && echo "$f"; done)"'])], "permissions", r)
+        st.operational = True
+        return st
     if sh == "configure_crypto_policy":
         vm = re.search(r"^var_system_crypto_policy='([^']+)'", bash, re.M)
         if not vm:
@@ -1319,12 +1421,18 @@ def m_file_hygiene(r):
         return op("sshd_crypto_policy_unset", "sed -i '/^\\s*CRYPTO_POLICY.*$/Id' /etc/sysconfig/sshd",
                   "grep -qiE '^[[:space:]]*CRYPTO_POLICY' /etc/sysconfig/sshd 2>/dev/null", "sshd")
     if sh == "gnome_gdm_disable_unattended_automatic_login":
+        # The upstream fix only seds an existing /etc/sysconfig/displaymanager. SLE 16 does
+        # not ship that file at all (gdm is configured in /etc/gdm/custom.conf and has no
+        # autologin by default), so the sed is a no-op and the rule's check still fails.
+        # Create the file with the two settings when it is missing; the unused file is harmless.
         f = "/etc/sysconfig/displaymanager"
         return op("gdm_no_autologin",
-                  f"sed -i 's/^DISPLAYMANAGER_AUTOLOGIN=.*/DISPLAYMANAGER_AUTOLOGIN=\"\"/; "
-                  f"s/^DISPLAYMANAGER_PASSWORD_LESS_LOGIN=.*/DISPLAYMANAGER_PASSWORD_LESS_LOGIN=\"no\"/' {f}",
-                  f"rpm -q gdm >/dev/null 2>&1 && test -f {f} && ! (grep -q '^DISPLAYMANAGER_AUTOLOGIN=\"\"' {f} "
-                  f"&& grep -q '^DISPLAYMANAGER_PASSWORD_LESS_LOGIN=\"no\"' {f})", "lineinfile")
+                  f"test -e {f} || install -m 0644 /dev/null {f}; "
+                  f"for kv in 'DISPLAYMANAGER_AUTOLOGIN=\"\"' 'DISPLAYMANAGER_PASSWORD_LESS_LOGIN=\"no\"'; do "
+                  f"k=${{kv%%=*}}; if grep -q \"^$k=\" {f}; then sed -i \"s/^$k=.*/$kv/\" {f}; "
+                  f"else echo \"$kv\" >> {f}; fi; done",
+                  f"rpm -q gdm >/dev/null 2>&1 && ! (grep -q '^DISPLAYMANAGER_AUTOLOGIN=\"\"' {f} 2>/dev/null "
+                  f"&& grep -q '^DISPLAYMANAGER_PASSWORD_LESS_LOGIN=\"no\"' {f} 2>/dev/null)", "lineinfile")
     return None
 
 
@@ -2249,6 +2357,48 @@ def emit_na(state_dir, na, meta, mac):
     write(os.path.join(state_dir, "SKIPPED_NA.md"), "\n".join(lines) + "\n")
 
 
+# The allow-lists arrive either as a list (the MLM form's edit-group) or as one
+# space-separated string (a hand-written pillar); both become a clean space-joined
+# string of sanitised names, so a stray space or quote can never inject a directive.
+_ALLOW_NORMALIZE = (
+    "{%- macro sshd_names(v) -%}\n"
+    "{%- if v is string %}{%- set v = v.split() %}{%- endif -%}\n"
+    "{%- set out = [] -%}\n"
+    "{%- for item in (v or []) -%}\n"
+    "{%- for n in (item | string).split() -%}\n"
+    "{%- set c = (n | regex_replace('[^A-Za-z0-9_.@-]', '')) -%}\n"
+    "{%- if c %}{%- do out.append(c) %}{%- endif -%}\n"
+    "{%- endfor -%}\n"
+    "{%- endfor -%}\n"
+    "{{ out | join(' ') }}\n"
+    "{%- endmacro %}\n"
+    "{%- set sshd_ag = sshd_names(p.get('sshd_allow_groups', [])) | trim %}\n"
+    "{%- set sshd_au = sshd_names(p.get('sshd_allow_users', [])) | trim %}\n")
+
+# Refuse to apply an allow-list that would exclude somebody who is logged in right now
+# (typically the admin running the highstate): sshd needs the user to satisfy BOTH
+# AllowUsers and AllowGroups when both are set. root is skipped (PermitRootLogin no).
+_ALLOW_OFFENDERS = (
+    r"""for u in $(who | awk '{print $1}' | sort -u); do """
+    r"""[ "$u" = root ] && continue; okg=1; oku=1; """
+    r"""[ "$G" != "  " ] && { okg=0; for g in $(id -nG "$u" 2>/dev/null); do case "$G" in *" $g "*) okg=1;; esac; done; }; """
+    r"""[ "$U" != "  " ] && { case "$U" in *" $u "*) ;; *) oku=0;; esac; }; """
+    r"""[ $okg = 1 ] && [ $oku = 1 ] || echo "$u"; done""")
+# Jinja expression that prefixes the (already sanitised) lists, then the fixed script;
+# the script is a single-quoted Jinja literal, so its single quotes are escaped.
+_ALLOW_SCRIPT = ("('G=\" ' ~ sshd_ag ~ ' \"; U=\" ' ~ sshd_au ~ ' \"; ' ~ '"
+                 + _ALLOW_OFFENDERS.replace("'", "\\'") + "')")
+_ALLOW_LOCKOUT_CHECK = (
+    "{%- if sshd_ag or sshd_au %}\n"
+    "sshd_allow_lockout_check:\n  cmd.run:\n"
+    "    - name: {{ ('off=$(' ~ " + _ALLOW_SCRIPT + " ~ '); "
+    "echo \"sshd allow-list NOT applied: it would lock out logged-in user(s): $off. Add them (or a group "
+    "they belong to) to the SSH allow-list, or log them out, then re-run the highstate.\" >&2; exit 1') "
+    "| tojson }}\n"
+    "    - onlyif: {{ ('test -n \"$(' ~ " + _ALLOW_SCRIPT + " ~ ')\"') | tojson }}\n"
+    "{%- endif %}\n")
+
+
 def sshd_extra_block(target, state_ids):
     """Jinja block appended to sshd.sls: operator-supplied AllowGroups/AllowUsers
     (pillar, empty = unrestricted) and a reload of sshd so the file changes take
@@ -2271,6 +2421,7 @@ def sshd_extra_block(target, state_ids):
             "    - repl: {{ ('" + directive + " ' ~ " + v + ") | tojson }}\n"
             "    - append_if_not_found: True\n    - backup: False\n"
             "    - onlyif: {{ (" + chk + ") | tojson }}\n"
+            "    - require:\n      - cmd: sshd_allow_lockout_check\n"
             f"sshd_{directive}_check:\n  cmd.run:\n"
             "    - name: \"echo 'sshd " + directive + ": none of the listed names exist; "
             "restriction NOT applied' >&2; exit 1\"\n"
@@ -2298,8 +2449,8 @@ def sshd_extra_block(target, state_ids):
         shadow
         + "\n# Optional SSH allow-lists (satisfy sshd_limit_user_access). Leave empty for\n"
         "# unrestricted logins; enter space-separated names in the MLM form.\n"
-        "{%- set sshd_ag = ((p.get('sshd_allow_groups', '') or '') | string | " + san + ").strip() %}\n"
-        "{%- set sshd_au = ((p.get('sshd_allow_users', '') or '') | string | " + san + ").strip() %}\n"
+        + _ALLOW_NORMALIZE
+        + _ALLOW_LOCKOUT_CHECK
         + one("groups", "AllowGroups", "group")
         + one("users", "AllowUsers", "passwd")
         + "\n# Make the changes live: validate, then reload (existing sessions persist).\n"
@@ -2734,26 +2885,34 @@ def emit_formula(outdir, meta, used_cats, mac, cat_pci=None):
         if c == "sshd":
             form += [
                 "  sshd_allow_groups:",
-                "    $type: text",
-                "    $default: ''",
-                "    $placeholder: users wheel",
+                "    $type: edit-group",
+                "    $minItems: 0",
+                "    $itemName: 'Group ${i}'",
                 "    $name: 'SSH: only allow these GROUPS to log in [PCI 2.2.4, 2.2.6] (optional)'",
-                "    $help: \"Space-separated group names written as AllowGroups. Satisfies "
+                "    $help: \"One group per row, written as AllowGroups. Satisfies "
                 "sshd_limit_user_access, which has no automatic fix because only you know who "
-                "may log in. Leave EMPTY for no restriction. WARNING: members of other groups, "
-                "including root, can no longer log in over SSH; include your admin and "
-                "management accounts, and YOUR OWN login account (check with id that you belong to "
-                "one of these groups before saving, or you lock yourself out of new SSH sessions). If none of the groups exist the highstate fails and "
-                "nothing is restricted.\"",
+                "may log in. Leave the list EMPTY for no restriction. WARNING: members of other "
+                "groups, including root, can no longer log in over SSH; include your admin and "
+                "management accounts, and the group of YOUR OWN login account (check with id). "
+                "The highstate refuses to apply a list that would exclude somebody who is logged "
+                "in right now, and fails (restricting nothing) if none of the groups exist.\"",
+                "    $prototype:",
+                "      $type: text",
+                "      $name: 'Group name'",
+                "      $placeholder: wheel",
                 "  sshd_allow_users:",
-                "    $type: text",
-                "    $default: ''",
-                "    $placeholder: admin1 admin2",
+                "    $type: edit-group",
+                "    $minItems: 0",
+                "    $itemName: 'User ${i}'",
                 "    $name: 'SSH: only allow these USERS to log in [PCI 2.2.4, 2.2.6] (optional)'",
-                "    $help: \"Space-separated user names written as AllowUsers (alternative or "
-                "addition to the group list). Leave EMPTY for no restriction. WARNING: list your own "
-                "login account too, or you lock yourself out of new SSH sessions. Same caveats as "
-                "the group list.\""]
+                "    $help: \"One user per row, written as AllowUsers (alternative or addition to "
+                "the group list; when both are set a user must match both). Leave the list EMPTY "
+                "for no restriction. WARNING: list your own login account too, or you lock "
+                "yourself out of new SSH sessions. Same safeguards as the group list.\"",
+                "    $prototype:",
+                "      $type: text",
+                "      $name: 'User name'",
+                "      $placeholder: admin1"]
     write(os.path.join(fdir, "form.yml"), "\n".join(form) + "\n")
 
     # Distinct display name per formula so multiple OS formulas are
@@ -2978,7 +3137,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.20", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.21", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -3116,7 +3275,7 @@ def emit_unmapped(state_dir, unmapped, meta, profile_id):
 NOREMED_NOTES = {
     "sshd_limit_user_access": (
         "Site-specific: set the `sshd_allow_groups` and/or `sshd_allow_users` pillar "
-        "keys (MLM form: *SSH: only allow these groups/users*) and the formula writes "
+        "keys (MLM form: *SSH: only allow these groups/users*, one name per row) and the formula writes "
         "`AllowGroups`/`AllowUsers` and reloads sshd. Unset = unrestricted, rule stays red."),
 }
 
@@ -3207,8 +3366,8 @@ def main():
                          "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.20",
-                    help="Version for the formula RPM (default: 1.0.20)")
+    ap.add_argument("--pkg-version", default="1.0.21",
+                    help="Version for the formula RPM (default: 1.0.21)")
     args = ap.parse_args()
 
     CONFIG["target"] = args.target

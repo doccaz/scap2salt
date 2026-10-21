@@ -25,9 +25,9 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | Remediable (coverage denominator) | 238 | 230 |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **226/238 — 94%** | **220/230 — 95%** |
-| Guarded operational states | 31 | 26 |
-| Remediable rules still unmapped | 12 | 10 |
+| **Native coverage** | **231/238 — 97%** | **223/230 — 96%** |
+| Guarded operational states | 36 | 29 |
+| Remediable rules still unmapped | 7 | 7 |
 
 Regenerate with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`. Keep these numbers in sync with the README's "Current coverage" section when handlers change.
 
@@ -116,7 +116,7 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_audit` | `audit_rules_*`, `audit_*`, + rules using the `rules.d` macro (e.g. `directory_access_var_log_audit`) | `audit` |
 | `m_auditd_conf` | `auditd_*` (auditd.conf / audisp plugin `key = value`) | `audit` |
 | `m_pam` | PAM module-arg rules using CaC's `VALUES/VALUE_NAMES/ARGS` macro (cracklib pwquality, `pam_unix` hashing, `pam_wheel`) | `pam` |
-| `m_file_hygiene` | `file_permissions_sshd_private_key`/`_pub_key`, `file_permissions_var_log_audit`, `file_ownership_var_log_audit` (find-guarded chmod/chown; `permissions`); `configure_crypto_policy` (installs `crypto-policies-scripts`, then `update-crypto-policies --set`), `configure_ssh_crypto_policy` (`sshd`); `gnome_gdm_disable_unattended_automatic_login` (`lineinfile`, only if `gdm` installed) | `permissions` / `sshd` / `lineinfile` |
+| `m_file_hygiene` | `file_permissions_sshd_private_key`/`_pub_key`, `file_permissions_var_log_audit`, `file_ownership_var_log_audit`, `rsyslog_files_{ownership,groupownership,permissions}` (find-guarded chmod/chown, only ever tightening; the rsyslog rules discover log paths from `rsyslog.conf`/`rsyslog.d` and are gated on the `rsyslog` package; `permissions`); `configure_crypto_policy` (installs `crypto-policies-scripts`, then `update-crypto-policies --set`), `configure_ssh_crypto_policy` (`sshd`); `gnome_gdm_disable_unattended_automatic_login` (`lineinfile`, only if `gdm` installed) | `permissions` / `sshd` / `lineinfile` |
 | `m_faillock` | `accounts_passwords_pam_faillock_{deny,unlock_time}` (**usr-etc/SLE16+ only**: SLE 15's PAM 1.3.0 has no `pam_faillock.so`) — `faillock.conf` key + CaC's `pam_faillock` lines in `common-auth`/`common-account` | `pam` |
 | `m_account_hygiene` | `no_empty_passwords` (drop `nullok`), `ensure_shadow_group_empty`, `ensure_pam_wheel_group_empty`, `set_password_hashing_algorithm_systemauth` (`pam`); `no_empty_passwords_etc_shadow`, `accounts_no_uid_except_zero`, `no_shelllogin_for_systemaccounts` (opt-in `accounts`) | `pam` / `accounts` |
 | `m_pwquality` | SLE16-style `accounts_password_pam_*` that edit `/etc/security/pwquality.conf` (seeded from `/usr/lib/security/pwquality.conf`) | `pam` |
@@ -133,6 +133,7 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_limits` | `disable_users_coredumps` (`/etc/security/limits.d/`) | `limits` |
 | `m_dconf` | `dconf_*` | `dconf` |
 | `m_dconf_profile` | `enable_dconf_user_profile` (`/etc/dconf/profile/gdm`), `dconf_db_up_to_date` (final `dconf update`, `order: last`), `dconf_gnome_session_idle_user_locks` (lock fragment) — all no-ops unless `gdm` is installed | `dconf` |
+| `m_tally2` | `accounts_passwords_pam_tally2{,_unlock_time}` (**SLE 15 only**: PAM 1.3.0 `pam_tally2` on `/etc/pam.d/login`, plus `account required pam_tally2.so` in `common-account`; reuses `_pam_option_state`, the update-or-append builder `m_pam` also uses) | `pam` |
 | `m_aide` | `aide_build_database`, `aide_periodic_checking_systemd_timer` | `aide` |
 | `m_rpm` | `ensure_gpgcheck_*`, `ensure_suse_gpgkey_*`, `rpm_verify_*` | `rpm` |
 
@@ -253,7 +254,7 @@ Every category `.sls` is wrapped in:
 ```
 This lets operators disable any category without editing state files.
 
-Two **optional text pillar keys** (also text fields in the MLM form, empty = off) live under the same namespace and are read by `sshd.sls`: `sshd_allow_groups` and `sshd_allow_users`. They satisfy `sshd_limit_user_access`, which ships no CaC remediation because only the site knows who may log in. Values are sanitised (`regex_replace`), written as `AllowGroups`/`AllowUsers` in the sshd target file, and a name list matching no existing group/user **fails the highstate loudly instead of locking everyone out** (`sshd_Allow*_check`). `sshd.sls` also ends with an `sshd_reload` (`sshd -t && systemctl reload sshd`, `onchanges` of every sshd state) so the hardening is live in the running daemon, not just in the files.
+Two **optional pillar keys** (list editors in the MLM form via `$type: edit-group`, empty = off; a plain space-separated string is also accepted) live under the same namespace and are read by `sshd.sls`: `sshd_allow_groups` and `sshd_allow_users`. They satisfy `sshd_limit_user_access`, which ships no CaC remediation because only the site knows who may log in. Names are split on whitespace and sanitised (`regex_replace`) in the `sshd_names` Jinja macro, written as `AllowGroups`/`AllowUsers` in the sshd target file, and a name list matching no existing group/user **fails the highstate loudly instead of locking everyone out** (`sshd_Allow*_check`). `sshd_allow_lockout_check` additionally fails (and, via `require`, blocks both directives) when a currently logged-in non-root user (`who`) would not satisfy the lists (both must match when both are set). `sshd.sls` also ends with an `sshd_reload` (`sshd -t && systemctl reload sshd`, `onchanges` of every sshd state) so the hardening is live in the running daemon, not just in the files.
 
 ---
 
@@ -300,6 +301,9 @@ Two **optional text pillar keys** (also text fields in the MLM form, empty = off
 - **faillock on SLE 15:** the `accounts_passwords_pam_faillock_*` rules are not mapped for SLE 15 because PAM 1.3.0 ships no `pam_faillock.so`; inserting it into `common-auth` would break authentication.
 - **PAM `common-auth` shape:** CaC's non-authselect faillock fix turns the single `pam_unix.so` auth line into `sufficient` and brackets it with `pam_faillock` preauth/authfail/authsucc. The `commonauth` hashing state and the faillock state both normalise to that same line, so they converge in either order. A box that ran an older scap2salt may carry a second `auth sufficient pam_unix.so` line. The faillock stack is therefore only applied when `common-auth` has at most one `pam_unix` auth line, and a `faillock_pam_stack_check` state **fails the highstate with instructions** if it finds more than one (or an already doubled stack) rather than doubling the stack again; restore a clean `common-auth` (e.g. from `/usr/etc/pam.d/common-auth-pc`) once and re-run. On SLE 15 (no faillock) the same condition is guarded by `pam_unix_auth_check` in `pam.sls`: the `commonauth` hashing state is skipped when `common-auth` has more than one `pam_unix` auth line and the check fails the highstate with instructions (remove the extra line from `common-auth` **and** `common-auth-pc`, since pam-config copies it into the template).
 - **No rollback:** the formula records no undo information, so applied hardening cannot be reverted reliably (modes/owners, in-place PAM/sudoers/selinux edits, immutable audit rules, removed packages). README "Reverting the hardening" tells operators to snapshot the VM first; a first-run snapshot state plus revert script is possible future work (needs a per-mapper manifest of touched paths).
+- **`sufficient pam_unix` needs a closing deny (SLE 15):** CaC's `set_password_hashing_algorithm_commonauth` turns `required pam_unix.so` into `sufficient`. That is only safe if something later fails the stack (faillock's `[default=die] authfail` on SLE 16). SLE 15 has nothing, so ANY `required` module that succeeds in a stack (e.g. `pam_tally2` appended to `/etc/pam.d/login`) rescues a failed password: verified on a lab host, `login` accepted a wrong password. The SLE 15 hashing state therefore also appends `auth required pam_deny.so` to `common-auth` (idempotent, guarded). Do not add `required`/`[success=ok]` auth modules to a stack that includes `common-auth` without it.
+- **`su` + `pam_wheel`:** the CaC fix appends `auth required pam_wheel.so use_uid group=sugroup` to `/etc/pam.d/su`. With `sufficient pam_unix` a correct password ends the stack, so a wheel line AFTER `auth include common-auth` is never evaluated (verified: a user outside `sugroup` could `su`). The state now moves the line BEFORE the include. On usr-etc targets `/etc/pam.d/su` does not exist, so the append created a file with only the wheel line, shadowing the vendor stack and breaking plain `su` for everybody; the state now seeds it from `/usr/lib/pam.d/su` first (and repairs such a file). `su -` uses the `su-l` service, which the CaC rule does not touch, so it stays unrestricted.
+- **`pam_tally2` (SLE 15 only)** is mapped (`m_tally2`) for `/etc/pam.d/login` (console logins; sshd does not use it) plus `account required pam_tally2.so` in `common-account`, safe only together with the `pam_deny` closure above.
 - Only the first matching mapper wins; there is no merging of multiple states for one rule.
 - OVAL checks are not parsed; the script relies entirely on XCCDF rule metadata and bash fix scripts for value extraction.
 - Bash fix extraction uses regex heuristics — unusual bash in a fix script may produce `None` and fall through to `UNMAPPED.md`.

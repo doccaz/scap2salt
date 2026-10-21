@@ -48,7 +48,7 @@ out/srv/
 
 Every state file is wrapped in a Jinja guard so any category can be disabled by setting `<formula>:<category>: False` in the pillar (or toggling the checkbox in the MLM Formulas tab) — where `<formula>` is the `--formula-name` (default `pci_dss`).
 
-**Optional SSH allow-list.** `sshd_limit_user_access` has no automatic fix upstream (only you know who may log in), so the form has two optional text fields, *SSH: only allow these GROUPS* (`sshd_allow_groups`) and *…USERS* (`sshd_allow_users`). Leave them empty for unrestricted SSH (the rule then stays red); fill them with space-separated names and the formula writes `AllowGroups`/`AllowUsers` and reloads sshd. If none of the names exist the highstate **fails instead of restricting anyone**. Include your admin and management accounts, **and the account you log in with** (check with `id` before saving — otherwise you lose new SSH sessions), and note that this also keeps `root` out of SSH unless it is listed. Changes to any sshd setting now take effect immediately through an `sshd -t && systemctl reload sshd` step (existing sessions are untouched).
+**Optional SSH allow-list.** `sshd_limit_user_access` has no automatic fix upstream (only you know who may log in), so the form has two optional lists, *SSH: only allow these GROUPS* (`sshd_allow_groups`) and *…USERS* (`sshd_allow_users`): one name per row (a plain space-separated string in a hand-written pillar also works). Leave them empty for unrestricted SSH (the rule then stays red); fill them and the formula writes `AllowGroups`/`AllowUsers` and reloads sshd. When both lists are set a user must match both. Safeguards: if none of the names exist the highstate **fails instead of restricting anyone**, and `sshd_allow_lockout_check` **refuses to apply a list that would exclude somebody who is logged in at that moment** (root excepted), which protects the admin running the highstate. Include your admin and management accounts, **and the account you log in with** (check with `id`), and note that this also keeps `root` out of SSH unless it is listed. If you saved the old text fields before, re-enter the names as list rows (a saved string is still honoured when set through the pillar directly). Changes to any sshd setting take effect immediately through an `sshd -t && systemctl reload sshd` step (existing sessions are untouched).
 
 ## Design principles
 
@@ -70,15 +70,15 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | **Remediable** (coverage denominator) | **238** | **230** |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **226 / 238 — 94%** | **220 / 230 — 95%** |
-| Guarded operational states | 31 | 26 |
-| Remediable rules still unmapped | 12 | 10 |
+| **Native coverage** | **231 / 238 — 97%** | **223 / 230 — 96%** |
+| Guarded operational states | 36 | 29 |
+| Remediable rules still unmapped | 7 | 7 |
 
 Coverage by category:
 
 | Category | SLE 15 | SLE 16 |
 |---|---|---|
-| File permissions & ownership | 56 | 56 |
+| File permissions & ownership | 59 | 59 |
 | Audit (auditd rules + auditd.conf) | 49 | 49 |
 | Package install / removal | 22 | 17 |
 | SSH server hardening | 19 | 17 |
@@ -86,7 +86,7 @@ Coverage by category:
 | Kernel parameters (sysctl) | 12 | 12 |
 | Service enable / disable | 8 | 8 |
 | GNOME desktop (dconf) policy | 10 | 10 |
-| PAM & account hygiene (pwquality, pam_unix, pam_wheel, faillock*, nullok) | 10 | 12 |
+| PAM & account hygiene (pwquality, pam_unix, pam_wheel, faillock*/tally2, nullok) | 12 | 12 |
 | Opt-in account hardening (password aging, sudo re-auth, extra UID 0, empty passwords, system shells) | 7 | 7 |
 | Package signatures & verification (RPM/GPG) | 5 | 4 |
 | Disabled kernel modules | 3 | 3 |
@@ -100,15 +100,15 @@ Coverage by category:
 
 ### Measured results on lab hosts
 
-`oscap xccdf eval` with the `pci-dss-4` profile, using the same CaC v0.1.82 datastream the states were generated from, after a clean highstate of the current formula (1.0.20) on lab VMs (Oct 2026):
+`oscap xccdf eval` with the `pci-dss-4` profile, using the same CaC v0.1.82 datastream the states were generated from, after a clean highstate of the current formula (1.0.21) on lab VMs (Oct 2026):
 
 | Host | Pass | Fail | Pass rate (pass / pass+fail) | Remaining failures |
 |---|---|---|---|---|
 | SLE 15 SP7 (AppArmor) | 231 | 9 | 96% | `selinux_state` and `selinux_policytype` (SELinux-only; AppArmor equivalents ship in `mac.sls`), `rpm_verify_permissions`, `ensure_suse_gpgkey_installed`, plus the shared list below |
-| SLE 16 (SELinux), clean-ish VM | 220 | 9 | 96% | the shared list below, plus the two [by-design SLE 16 rules](#sle-16-rules-that-fail-a-scan-by-design) |
+| SLE 16 (SELinux), with `gdm` + `dconf` installed | 231 | 9 | 96% | the shared list below, plus the two [by-design SLE 16 rules](#sle-16-rules-that-fail-a-scan-by-design) |
 | SLE 16 (SELinux), long-lived lab VM | 217 | 12 | 95% | as above, plus 3 filesystem-hygiene findings specific to that VM (world-writable file, unowned/ungrouped files) |
 
-Shared across hosts: `display_login_attempts` (upstream fix is a no-op on SUSE), `ensure_firewall_rules_for_open_ports` and `set_firewalld_default_zone` (site-specific, no upstream fix), and the opt-in `sudo_require_authentication` and `accounts_password_set_max_life_existing`. `sshd_limit_user_access` stays red until you fill the SSH allow-list fields. SLE 16 also shows `selinux_confinement_of_daemons`, which cannot be satisfied on a stock install. A further 15-20 rules per host are not applicable and 2-3 are not checked. The `dconf_*` (GNOME) rules only apply where `gdm` is installed, so the headless lab VMs do not exercise them; the new dconf states are skipped there (their `onlyif: rpm -q gdm` is false), so the scan numbers do not change.
+Shared across hosts: `display_login_attempts` (upstream fix is a no-op on SUSE), `ensure_firewall_rules_for_open_ports` and `set_firewalld_default_zone` (site-specific, no upstream fix), and the opt-in `sudo_require_authentication` and `accounts_password_set_max_life_existing`. `sshd_limit_user_access` stays red until you fill the SSH allow-list fields. SLE 16 also shows `selinux_confinement_of_daemons`, which cannot be satisfied on a stock install. A further 15-20 rules per host are not applicable and 2-3 are not checked. The `dconf_*` (GNOME) rules and the gdm autologin rule only apply where `gdm` is installed: the SLE 15 and long-lived SLE 16 VMs are headless (they report those rules as not applicable), while the SLE 16 row with `gdm` and `dconf` installed passes all of them (231 versus 220 on the same VM before `gdm` was installed, because the extra desktop rules now count).
 
 Regenerate these numbers any time with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`.
 
@@ -169,6 +169,10 @@ chooses package integrity. The same notice is generated into the formula's
 > line. Remove or fix the offending drop-in. Also note SLE 16 ships sshd's config
 > in `/usr/etc/ssh/sshd_config`; an empty `/etc/ssh/sshd_config` will shadow it
 > and disable **all** drop-ins.
+
+### PAM auth-stack safety (SLE 15)
+
+CaC's `set_password_hashing_algorithm_commonauth` rewrites the `pam_unix.so` auth line of `common-auth` from `required` to `sufficient`. On SLE 16 the `pam_faillock` stack that follows makes that safe; SLE 15 has no equivalent, so the formula appends a closing `auth required pam_deny.so`. Without it any `required` auth module that succeeds elsewhere in a service's stack (for example the `pam_tally2` line the lockout rule adds to `/etc/pam.d/login`) would accept a wrong password; this was reproduced and fixed during testing. The `su` restriction (`use_pam_wheel_group_for_su`) is likewise placed **before** the `common-auth` include, and on SLE 16 `/etc/pam.d/su` is seeded from the vendor file instead of being created with a single line. `su -` (service `su-l`) is not covered by the upstream rule.
 
 ### Form transparency
 

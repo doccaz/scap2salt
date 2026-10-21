@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-10-21T17:19:51+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
+Generated 2026-10-21T19:12:01+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -125,6 +125,9 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `file_permissions_sshd_pub_key`<br><sub>Verify Permissions on SSH Server Public *.pub Key Files</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | operational cmd: `find /etc/ssh -maxdepth 1 -type f -name '*.pub' -perm /7133 -exec chmod u-xs,g-xws,o-xw…` |
 | `file_permissions_var_log_audit`<br><sub>System Audit Logs Must Have Mode 0640 or Less Permissive</sub> | medium | Req-10.5, 10.3.1, 10.3 | operational cmd: `G=$(awk -F= '/^log_group/ {gsub(/ /,"",$2); print $2}' /etc/audit/auditd.conf 2>/dev/nu…` |
 | `permissions_local_var_log`<br><sub>Verify permissions of log files</sub> | medium | 10.3.1, 10.3 | operational cmd: `find /var/log/ -perm /u+xs,g+xws,o+xwrt -type f -exec chmod u-xs,g-xws,o-xwrt {} +` |
+| `rsyslog_files_groupownership`<br><sub>Ensure Log Files Are Owned By Appropriate Group</sub> | medium | Req-10.5.1, Req-10.5.2, 10.3.2, 10.3 | operational cmd: `rl() { for c in /etc/rsyslog.conf /etc/rsyslog.d/*.conf; do [ -f "$c" ] || continue; se…` |
+| `rsyslog_files_ownership`<br><sub>Ensure Log Files Are Owned By Appropriate User</sub> | medium | Req-10.5.1, Req-10.5.2, 10.3.2, 10.3 | operational cmd: `rl() { for c in /etc/rsyslog.conf /etc/rsyslog.d/*.conf; do [ -f "$c" ] || continue; se…` |
+| `rsyslog_files_permissions`<br><sub>Ensure System Log Files Have Correct Permissions</sub> | medium | Req-10.5.1, Req-10.5.2, 10.3.1, 10.3 | operational cmd: `rl() { for c in /etc/rsyslog.conf /etc/rsyslog.d/*.conf; do [ -f "$c" ] || continue; se…` |
 
 ## Disabled kernel modules (`kernel_modules`)
 
@@ -167,7 +170,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `chronyd_run_as_chrony_user`<br><sub>Ensure that chronyd is running under chrony user account</sub> | medium | 10.6.3, 10.6 | line in `/etc/sysconfig/chronyd`: `OPTIONS="-u chrony"` |
 | `chronyd_specify_remote_server`<br><sub>A remote time server for Chrony is configured</sub> | medium | Req-10.4.3, 10.6.2, 10.6 | line in `/etc/chrony.conf`: `\g<0>` |
 | `disable_host_auth`<br><sub>Disable Host-Based Authentication</sub> | medium | 8.3.1, 8.3 | line in `/etc/ssh/sshd_config.d/01-complianceascode-reinforce-os-defaults.conf`: `HostbasedAuthentication no` |
-| `gnome_gdm_disable_unattended_automatic_login`<br><sub>Disable GDM Unattended or Automatic Login</sub> | high | 8.3.1, 8.3 | operational cmd: `sed -i 's/^DISPLAYMANAGER_AUTOLOGIN=.*/DISPLAYMANAGER_AUTOLOGIN=""/; s/^DISPLAYMANAGER_…` |
+| `gnome_gdm_disable_unattended_automatic_login`<br><sub>Disable GDM Unattended or Automatic Login</sub> | high | 8.3.1, 8.3 | operational cmd: `test -e /etc/sysconfig/displaymanager || install -m 0644 /dev/null /etc/sysconfig/displ…` |
 | `no_direct_root_logins`<br><sub>Direct root Logins Not Allowed</sub> | medium | 8.6.1, 8.6 | manage `/etc/securetty` (mode 0600) |
 | `postfix_network_listening_disabled`<br><sub>Disable Postfix Network Listening</sub> | medium | 1.4.2, 1.4 | line in `/etc/postfix/main.cf`: `inet_interfaces=loopback-only` |
 | `securetty_root_login_console_only`<br><sub>Restrict Virtual Console Root Logins</sub> | medium | 8.6.1, 8.6 | edit `/etc/securetty` |
@@ -200,7 +203,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `no_empty_passwords`<br><sub>Prevent Login to Accounts With Empty Password</sub> | high | Req-8.2.3, 8.3.1, 8.3 | operational cmd: `grep -rlE 'pam_unix\.so.*nullok' /etc/pam.d/ | xargs -r sed --follow-symlinks -i 's/\<n…` |
 | `set_password_hashing_algorithm_commonauth`<br><sub>Set PAM's Common Authentication Hashing Algorithm</sub> | medium | Req-8.2.1, 8.3.2, 8.3 | operational cmd: `f=/etc/pam.d/common-auth; grep -qE "^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+…` |
 | `set_password_hashing_algorithm_systemauth`<br><sub>Set PAM Password Hashing Algorithm - system-auth</sub> | medium | Req-8.2.1, 8.3.2, 8.3 | operational cmd: `sed -i -E --follow-symlinks '/^\s*password\s+required\s+pam_unix\.so/ s/$/ sha512/' /et…` |
-| `use_pam_wheel_group_for_su`<br><sub>Enforce Usage of pam_wheel with Group Parameter for su Authentication</sub> | medium | 2.2.6, 2.2 | operational cmd: `f=/etc/pam.d/su; grep -qE "^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_wheel\.…` |
+| `use_pam_wheel_group_for_su`<br><sub>Enforce Usage of pam_wheel with Group Parameter for su Authentication</sub> | medium | 2.2.6, 2.2 | operational cmd: `f=/etc/pam.d/su; if [ -e /usr/lib/pam.d/su ] && ! grep -q common-auth /etc/pam.d/su 2>/…` |
 
 ## Sudo defaults (sudoers.d drop-ins) (`sudo`)
 
