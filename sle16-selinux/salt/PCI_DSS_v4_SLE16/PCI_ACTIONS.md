@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-10-21T20:06:16+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
+Generated 2026-10-21T20:52:41+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -69,6 +69,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 
 | Rule | Sev | PCI-DSS | Action |
 |---|---|---|---|
+| `dir_perms_world_writable_sticky_bits`<br><sub>Verify that All World-Writable Directories Have Sticky Bits Set</sub> | medium | 2.2.6, 2.2 | operational cmd: `df --local -P | awk 'NR>1 {print $6}' | xargs -I '$6' find '$6' -xdev -type d \( -perm …` |
 | `file_at_deny_not_exist`<br><sub>Ensure that /etc/at.deny does not exist</sub> | medium | 2.2.6, 2.2 | ensure `/etc/at.deny` absent |
 | `file_cron_deny_not_exist`<br><sub>Ensure that /etc/cron.deny does not exist</sub> | medium | 2.2.6, 2.2 | ensure `/etc/cron.deny` absent |
 | `file_groupowner_at_allow`<br><sub>Verify Group Who Owns /etc/at.allow file</sub> | medium | 2.2.6, 2.2 | manage `/etc/at.allow` |

@@ -71,15 +71,15 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | **Remediable** (coverage denominator) | **238** | **230** |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **231 / 238 — 97%** | **223 / 230 — 96%** |
-| Guarded operational states | 36 | 29 |
-| Remediable rules still unmapped | 7 | 7 |
+| **Native coverage** | **232 / 238 — 97%** | **224 / 230 — 97%** |
+| Guarded operational states | 37 | 30 |
+| Remediable rules still unmapped | 6 | 6 |
 
 Coverage by category:
 
 | Category | SLE 15 | SLE 16 |
 |---|---|---|
-| File permissions & ownership | 59 | 59 |
+| File permissions & ownership | 60 | 60 |
 | Audit (auditd rules + auditd.conf) | 49 | 49 |
 | Package install / removal | 22 | 17 |
 | SSH server hardening | 19 | 17 |
@@ -101,15 +101,15 @@ Coverage by category:
 
 ### Measured results on lab hosts
 
-`oscap xccdf eval` with the `pci-dss-4` profile, using the same CaC v0.1.82 datastream the states were generated from, after a clean highstate of the current formula (1.0.21) on lab VMs (Oct 2026):
+`oscap xccdf eval` with the `pci-dss-4` profile, using the same CaC v0.1.82 datastream the states were generated from, after a clean highstate of the current formula (1.0.22) on lab VMs (Oct 2026):
 
 | Host | Pass | Fail | Pass rate (pass / pass+fail) | Remaining failures |
 |---|---|---|---|---|
 | SLE 15 SP7 (AppArmor) | 231 | 9 | 96% | `selinux_state` and `selinux_policytype` (SELinux-only; AppArmor equivalents ship in `mac.sls`), `rpm_verify_permissions`, `ensure_suse_gpgkey_installed`, plus the shared list below |
 | SLE 16 (SELinux), with `gdm` + `dconf` installed | 231 | 9 | 96% | the shared list below, plus the two [by-design SLE 16 rules](#sle-16-rules-that-fail-a-scan-by-design) |
-| SLE 16 (SELinux), long-lived lab VM | 217 | 12 | 95% | as above, plus 3 filesystem-hygiene findings specific to that VM (world-writable file, unowned/ungrouped files) |
+| SLE 16 (SELinux), reinstalled from the stock image | 220 | 9 | 96% | the shared list below, plus the two [by-design SLE 16 rules](#sle-16-rules-that-fail-a-scan-by-design); a scan of the same image **before** the formula gave 103 pass / 121 fail |
 
-Shared across hosts: `display_login_attempts` (upstream fix is a no-op on SUSE), `ensure_firewall_rules_for_open_ports` and `set_firewalld_default_zone` (site-specific, no upstream fix), and the opt-in `sudo_require_authentication` and `accounts_password_set_max_life_existing`. `sshd_limit_user_access` stays red until you fill the SSH allow-list fields. SLE 16 also shows `selinux_confinement_of_daemons`, which cannot be satisfied on a stock install. A further 15-20 rules per host are not applicable and 2-3 are not checked. The `dconf_*` (GNOME) rules and the gdm autologin rule only apply where `gdm` is installed: the SLE 15 and long-lived SLE 16 VMs are headless (they report those rules as not applicable), while the SLE 16 row with `gdm` and `dconf` installed passes all of them (231 versus 220 on the same VM before `gdm` was installed, because the extra desktop rules now count).
+Shared across hosts: `display_login_attempts` (upstream fix is a no-op on SUSE), `ensure_firewall_rules_for_open_ports` and `set_firewalld_default_zone` (site-specific, no upstream fix), and the opt-in `sudo_require_authentication` and `accounts_password_set_max_life_existing`. `sshd_limit_user_access` stays red until you fill the SSH allow-list fields. SLE 16 also shows `selinux_confinement_of_daemons`, which cannot be satisfied on a stock install. A further 15-20 rules per host are not applicable and 2-3 are not checked. The `dconf_*` (GNOME) rules and the gdm autologin rule only apply where `gdm` is installed: the SLE 15 and reinstalled SLE 16 VMs are headless (they report those rules as not applicable), while the SLE 16 row with `gdm` and `dconf` installed passes all of them (231 versus 220 on the same VM before `gdm` was installed, because the extra desktop rules now count).
 
 Regenerate these numbers any time with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`.
 
@@ -177,7 +177,7 @@ CaC's `set_password_hashing_algorithm_commonauth` rewrites the `pam_unix.so` aut
 
 ### Rules deliberately left unmapped
 
-The remaining unmapped rules (7 on each target) are skipped on purpose; each is also explained in the generated `UNMAPPED.md`.
+The remaining unmapped rules (6 on each target) are skipped on purpose; each is also explained in the generated `UNMAPPED.md`.
 
 | Rule | Why it is not automated |
 |---|---|
@@ -187,7 +187,6 @@ The remaining unmapped rules (7 on each target) are skipped on purpose; each is 
 | `network_sniffer_disabled` | switches promiscuous mode and multicast off on all interfaces, breaking bridges, container/VM networking and packet capture |
 | `wireless_disable_interfaces` | installs NetworkManager and switches radios off; site-specific, servers without wireless hardware already comply |
 | `display_login_attempts` | unsatisfiable on SUSE: the upstream fix edits `pam_lastlog2`, which SLE 15/16 do not use |
-| `dir_perms_world_writable_sticky_bits` | a *candidate* for mapping (adds the sticky bit, low risk), not done yet because the upstream fix walks every filesystem on each run |
 
 ### Form transparency
 

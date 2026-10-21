@@ -1405,6 +1405,13 @@ def m_file_hygiene(r):
                          + ' && echo "$f"; done)"'])], "permissions", r)
         st.operational = True
         return st
+    if sh == "dir_perms_world_writable_sticky_bits":
+        # Same scope as the upstream fix (every local filesystem, -xdev). The guard stops at the
+        # first offender (-quit), so a compliant host pays one read-only walk, not a chmod pass.
+        walk = ("df --local -P | awk 'NR>1 {print $6}' | xargs -I '$6' find '$6' -xdev -type d "
+                "\\( -perm -0002 -a ! -perm -1000 \\) ")
+        return op("world_writable_dirs_sticky_bit", walk + "-exec chmod a+t {} + 2>/dev/null; true",
+                  walk + "-print -quit 2>/dev/null | grep -q .", "permissions")
     if sh == "configure_crypto_policy":
         vm = re.search(r"^var_system_crypto_policy='([^']+)'", bash, re.M)
         if not vm:
@@ -3359,9 +3366,6 @@ UNMAPPED_NOTES = {
     "file_permissions_unauthorized_world_writable": (
         "unsafe: strips `o+w` from every regular file on every local filesystem. That can break applications "
         "that rely on world-writable files; fix the offenders it reports (`find / -xdev -type f -perm -002`) case by case."),
-    "dir_perms_world_writable_sticky_bits": (
-        "candidate: adds the sticky bit to world-writable directories (low risk), but the fix walks every local "
-        "filesystem on each run. Not mapped yet; a bounded, find-guarded state could be added."),
     "network_sniffer_disabled": (
         "unsafe: turns promiscuous mode and multicast off on every interface (`ip link set ... promisc off`), "
         "which breaks bridges, container/VM networking and packet capture. Hosts that must not sniff should be fixed by design."),

@@ -25,9 +25,9 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | Remediable (coverage denominator) | 238 | 230 |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **231/238 — 97%** | **223/230 — 96%** |
-| Guarded operational states | 36 | 29 |
-| Remediable rules still unmapped | 7 | 7 |
+| **Native coverage** | **232/238 — 97%** | **224/230 — 97%** |
+| Guarded operational states | 37 | 30 |
+| Remediable rules still unmapped | 6 | 6 |
 
 Regenerate with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`. Keep these numbers in sync with the README's "Current coverage" section when handlers change.
 
@@ -116,7 +116,7 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_audit` | `audit_rules_*`, `audit_*`, + rules using the `rules.d` macro (e.g. `directory_access_var_log_audit`) | `audit` |
 | `m_auditd_conf` | `auditd_*` (auditd.conf / audisp plugin `key = value`) | `audit` |
 | `m_pam` | PAM module-arg rules using CaC's `VALUES/VALUE_NAMES/ARGS` macro (cracklib pwquality, `pam_unix` hashing, `pam_wheel`) | `pam` |
-| `m_file_hygiene` | `file_permissions_sshd_private_key`/`_pub_key`, `file_permissions_var_log_audit`, `file_ownership_var_log_audit`, `rsyslog_files_{ownership,groupownership,permissions}` (find-guarded chmod/chown, only ever tightening; the rsyslog rules discover log paths from `rsyslog.conf`/`rsyslog.d` and are gated on the `rsyslog` package; `permissions`); `configure_crypto_policy` (installs `crypto-policies-scripts`, then `update-crypto-policies --set`), `configure_ssh_crypto_policy` (`sshd`); `gnome_gdm_disable_unattended_automatic_login` (`lineinfile`, only if `gdm` installed) | `permissions` / `sshd` / `lineinfile` |
+| `m_file_hygiene` | `file_permissions_sshd_private_key`/`_pub_key`, `file_permissions_var_log_audit`, `file_ownership_var_log_audit`, `dir_perms_world_writable_sticky_bits`, `rsyslog_files_{ownership,groupownership,permissions}` (find-guarded chmod/chown, only ever tightening; the rsyslog rules discover log paths from `rsyslog.conf`/`rsyslog.d` and are gated on the `rsyslog` package; `permissions`); `configure_crypto_policy` (installs `crypto-policies-scripts`, then `update-crypto-policies --set`), `configure_ssh_crypto_policy` (`sshd`); `gnome_gdm_disable_unattended_automatic_login` (`lineinfile`, only if `gdm` installed) | `permissions` / `sshd` / `lineinfile` |
 | `m_faillock` | `accounts_passwords_pam_faillock_{deny,unlock_time}` (**usr-etc/SLE16+ only**: SLE 15's PAM 1.3.0 has no `pam_faillock.so`) — `faillock.conf` key + CaC's `pam_faillock` lines in `common-auth`/`common-account` | `pam` |
 | `m_account_hygiene` | `no_empty_passwords` (drop `nullok`), `ensure_shadow_group_empty`, `ensure_pam_wheel_group_empty`, `set_password_hashing_algorithm_systemauth` (`pam`); `no_empty_passwords_etc_shadow`, `accounts_no_uid_except_zero`, `no_shelllogin_for_systemaccounts` (opt-in `accounts`) | `pam` / `accounts` |
 | `m_pwquality` | SLE16-style `accounts_password_pam_*` that edit `/etc/security/pwquality.conf` (seeded from `/usr/lib/security/pwquality.conf`) | `pam` |
@@ -308,7 +308,7 @@ Two **optional pillar keys** (list editors in the MLM form via `$type: edit-grou
 - OVAL checks are not parsed; the script relies entirely on XCCDF rule metadata and bash fix scripts for value extraction.
 - Bash fix extraction uses regex heuristics — unusual bash in a fix script may produce `None` and fall through to `UNMAPPED.md`.
 - Multi-value sysctl rules (rare) produce one state per rule; no deduplication.
-- Seven remediable rules are deliberately unmapped on both targets (`rpm_verify_hashes`, `security_patches_up_to_date`, `file_permissions_unauthorized_world_writable`, `network_sniffer_disabled`, `wireless_disable_interfaces`, `display_login_attempts`, `dir_perms_world_writable_sticky_bits`); the reasons live in `UNMAPPED_NOTES` in `scap2salt.py` (rendered into `UNMAPPED.md`) and in the README. The sticky-bit rule is the only mapping candidate.
+- Six remediable rules are deliberately unmapped on both targets (`rpm_verify_hashes`, `security_patches_up_to_date`, `file_permissions_unauthorized_world_writable`, `network_sniffer_disabled`, `wireless_disable_interfaces`, `display_login_attempts`); the reasons live in `UNMAPPED_NOTES` in `scap2salt.py` (rendered into `UNMAPPED.md`) and in the README. `dir_perms_world_writable_sticky_bits` is mapped (`m_file_hygiene`, `-quit`-bounded guard).
 - PCI-DSS v3 does not exist as a profile for SLE in ComplianceAsCode — only `pci-dss-4` (v4.0.1) ships for SUSE targets. The `--profile` flag accepts any ID, so a RHEL datastream with a v3 profile still works if needed.
 - SLE 16 does not ship native Salt packages; MLM/Uyuni manages SLE 16 clients via its bundled minion. Confirm your CaC release ships `ssg-sle16-ds.xml` before targeting `--target sle16`.
 - `--report-only` coverage numbers for `lineinfile`, `audit`, `sshd`, and `dconf` are projections from CaC's deterministic macro idioms — true numbers only appear when running against a real `ssg-*-ds.xml`.

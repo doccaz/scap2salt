@@ -1,12 +1,8 @@
 # Unmapped rules — xccdf_org.ssgproject.content_profile_pci-dss-4
 
-Generated 2026-10-21T20:06:15+00:00 from `ssg-sle15-ds.xml`.
+Generated 2026-10-21T20:52:40+00:00 from `ssg-sle15-ds.xml`.
 
-7 selected rule(s) have **no native Salt handler** and were skipped (native-only mode). Add a mapper in `scap2salt.py` or handle these via a separate reviewed state.
-
-## dir* (1)
-- `dir_perms_world_writable_sticky_bits` — Verify that All World-Writable Directories Have Sticky Bits Set (PCI 2.2.6, 2.2; sev medium)
-  - candidate: adds the sticky bit to world-writable directories (low risk), but the fix walks every local filesystem on each run. Not mapped yet; a bounded, find-guarded state could be added.
+6 selected rule(s) have **no native Salt handler** and were skipped (native-only mode). Add a mapper in `scap2salt.py` or handle these via a separate reviewed state.
 
 ## display* (1)
 - `display_login_attempts` — Ensure PAM Displays Last Logon/Access Notification (PCI Req-10.2.4, 10.2.1.4, 10.2.1, 10.2; sev low)
