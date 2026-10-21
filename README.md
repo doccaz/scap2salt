@@ -212,6 +212,18 @@ reboot). It also touches `/run/reboot-needed`, which the Uyuni minion's
 required* in MLM like any other pending reboot. The highstate itself stays
 green; a note is logged to syslog (`scap2salt`). Rebooting clears both markers.
 
+### Reverting the hardening
+
+**The formula has no undo.** It only applies changes; unassigning it from a system stops further enforcement but reverts nothing. Original values are not recorded, so a returned-to-stock state cannot be reconstructed afterwards. Some changes are only approximately reversible:
+
+- file modes and owners (originals are not recorded; `rpm --setperms`/`--setugids` resets packaged files only);
+- in-place edits of `common-auth`, `common-password`, `/etc/sudoers` and `/etc/selinux/config` (vendor copies live in `/usr/etc` on SLE 16);
+- immutable audit rules (`-e 2`, cleared only by a reboot), the kernel command line, the crypto policy, the AIDE database, removed packages, and, if the opt-in `accounts` category was on, already-expired passwords.
+
+Before applying the formula to a system you may want to return to stock, **take a VM snapshot or backup first** (for example a Harvester VM snapshot), or plan to reinstall. On a lab system, a reinstall plus re-bootstrap is the only way to get a truly stock box.
+
+*Possible future work:* a first-run `undo_snapshot` state that records every touched file (`cp -a`), mode/owner, service and package state under `/var/lib/scap2salt/undo/`, plus a revert script. The generator already knows each state's target, so it would need a per-mapper manifest of touched paths.
+
 ## Usage
 
 ```bash
