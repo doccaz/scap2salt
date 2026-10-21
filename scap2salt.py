@@ -1186,6 +1186,77 @@ def _m_pam(r):
     return m_pam(r)
 
 
+# auditd.conf log_group, defaulting to root: the group the audit log files must carry.
+_AUDIT_GROUP = ("G=$(awk -F= '/^log_group/ {gsub(/ /,\"\",$2); print $2}' /etc/audit/auditd.conf 2>/dev/null); "
+                "[ -n \"$G\" ] || G=root")
+
+
+@mapper
+def m_file_hygiene(r):
+    """Small file-mode / ownership / crypto-policy rules whose CaC fix is a short
+    shell snippet, emitted as idempotent guarded states (find-based guards, so a
+    host that already complies is left alone). Rules that rewrite arbitrary
+    files across the filesystem are deliberately not handled here."""
+    sh = r.short
+    bash = r.bash or ""
+
+    def op(sid, name, guard, cat, unless=False):
+        st = SaltState(sid, "cmd.run",
+                       [("name", name), ("unless" if unless else "onlyif", guard)], cat, r)
+        st.operational = True
+        return st
+
+    if sh == "file_permissions_sshd_private_key":
+        find = "find /etc/ssh -maxdepth 1 -type f -name '*_key' -user root -group root -perm /7177"
+        return op("sshd_private_key_perms", find + " -exec chmod u-xs,g-xwrs,o-xwrt {} +",
+                  find + " | grep -q .", "permissions")
+    if sh == "file_permissions_sshd_pub_key":
+        find = "find /etc/ssh -maxdepth 1 -type f -name '*.pub' -perm /7133"
+        return op("sshd_pub_key_perms", find + " -exec chmod u-xs,g-xws,o-xwt {} +",
+                  find + " | grep -q .", "permissions")
+    if sh == "file_permissions_var_log_audit":
+        find = "find /var/log/audit -maxdepth 1 -type f -name 'audit.log*' -perm /7137"
+        return op("audit_log_perms",
+                  _AUDIT_GROUP + "; if [ \"$G\" != root ]; then m=0640; else m=0600; fi; "
+                  "find /var/log/audit -maxdepth 1 -type f -name 'audit.log*' -exec chmod $m {} +",
+                  find + " | grep -q .", "permissions")
+    if sh == "file_ownership_var_log_audit":
+        return op("audit_log_ownership",
+                  _AUDIT_GROUP + "; chown root:$G /var/log/audit; "
+                  "find /var/log/audit -maxdepth 1 -type f -name 'audit.log*' -exec chown root:$G {} +",
+                  _AUDIT_GROUP + "; find /var/log/audit -maxdepth 1 \\( -type d -o -name 'audit.log*' \\) "
+                  "\\( ! -user root -o ! -group $G \\) | grep -q .", "permissions")
+    if sh == "configure_crypto_policy":
+        vm = re.search(r"^var_system_crypto_policy='([^']+)'", bash, re.M)
+        if not vm:
+            return None
+        pol = vm.group(1)
+        # The rule's OVAL also requires the crypto-policies-scripts package (it ships
+        # update-crypto-policies), which SUSE does not install by default.
+        st = SaltState("crypto_policies_scripts_installed", "pkg.installed",
+                       [("name", "crypto-policies-scripts")], "sshd", r)
+        cmd = [
+            ("name", f"update-crypto-policies --set {pol}"),
+            ("unless", f"grep -qx '{pol}' /etc/crypto-policies/config "
+                       f"&& grep -qx '{pol}' /etc/crypto-policies/state/current "
+                       "&& test -e /etc/crypto-policies/back-ends/nss.config"),
+            ("require", ["pkg: crypto_policies_scripts_installed"])]
+        st.extra_states.append(("crypto_policy_" + pol.lower().replace(":", "_").replace("-", "_"),
+                                "cmd.run", cmd))
+        return st
+    if sh == "configure_ssh_crypto_policy":
+        return op("sshd_crypto_policy_unset", "sed -i '/^\\s*CRYPTO_POLICY.*$/Id' /etc/sysconfig/sshd",
+                  "grep -qiE '^[[:space:]]*CRYPTO_POLICY' /etc/sysconfig/sshd 2>/dev/null", "sshd")
+    if sh == "gnome_gdm_disable_unattended_automatic_login":
+        f = "/etc/sysconfig/displaymanager"
+        return op("gdm_no_autologin",
+                  f"sed -i 's/^DISPLAYMANAGER_AUTOLOGIN=.*/DISPLAYMANAGER_AUTOLOGIN=\"\"/; "
+                  f"s/^DISPLAYMANAGER_PASSWORD_LESS_LOGIN=.*/DISPLAYMANAGER_PASSWORD_LESS_LOGIN=\"no\"/' {f}",
+                  f"rpm -q gdm >/dev/null 2>&1 && test -f {f} && ! (grep -q '^DISPLAYMANAGER_AUTOLOGIN=\"\"' {f} "
+                  f"&& grep -q '^DISPLAYMANAGER_PASSWORD_LESS_LOGIN=\"no\"' {f})", "lineinfile")
+    return None
+
+
 FAILLOCK_CONF = "/etc/security/faillock.conf"
 # CaC's non-authselect pam_faillock stack for common-auth/common-account (SLE has
 # no authselect). It also normalises the single pam_unix.so auth line to
@@ -2818,7 +2889,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.16", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.17", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -3047,8 +3118,8 @@ def main():
                          "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.16",
-                    help="Version for the formula RPM (default: 1.0.16)")
+    ap.add_argument("--pkg-version", default="1.0.17",
+                    help="Version for the formula RPM (default: 1.0.17)")
     args = ap.parse_args()
 
     CONFIG["target"] = args.target

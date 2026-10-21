@@ -70,19 +70,19 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | **Remediable** (coverage denominator) | **238** | **230** |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **216 / 238 — 90%** | **210 / 230 — 91%** |
-| Guarded operational states | 23 | 18 |
-| Remediable rules still unmapped | 22 | 20 |
+| **Native coverage** | **223 / 238 — 93%** | **217 / 230 — 94%** |
+| Guarded operational states | 29 | 24 |
+| Remediable rules still unmapped | 15 | 13 |
 
 Coverage by category:
 
 | Category | SLE 15 | SLE 16 |
 |---|---|---|
-| File permissions & ownership | 53 | 53 |
+| File permissions & ownership | 56 | 56 |
 | Audit (auditd rules + auditd.conf) | 49 | 49 |
 | Package install / removal | 22 | 17 |
-| SSH server hardening | 17 | 15 |
-| Config-file settings (login.defs, securetty, etc.) | 12 | 11 |
+| SSH server hardening | 19 | 17 |
+| Config-file settings (login.defs, securetty, etc.) | 13 | 12 |
 | Kernel parameters (sysctl) | 12 | 12 |
 | Service enable / disable | 8 | 8 |
 | GNOME desktop (dconf) policy | 7 | 7 |

@@ -37,7 +37,7 @@ PCI_DSS_v4_SLE16:
   permissions:
     $type: boolean
     $default: True
-    $name: "File permissions & ownership [PCI 1.2, 2.2, 7.1, 8.7, 10.3] — ownership & mode on sensitive files"
+    $name: "File permissions & ownership [PCI 1.2, 2.2, 7.1, 8.7, 10.3, 10.5] — ownership & mode on sensitive files"
     $help: "PCI-DSS §2.2.6, §8.6 — Enforces POSIX ownership and mode on sensitive files: passwd, shadow, sudoers, cron files, at.allow/deny, audit logs, SSH host keys, and more. Uses file.managed with replace: False so file content is never overwritten."
   kernel_modules:
     $type: boolean

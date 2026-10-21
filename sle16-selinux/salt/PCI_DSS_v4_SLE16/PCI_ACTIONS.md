@@ -1,6 +1,6 @@
 # PCI-DSS v4 — actions reference
 
-Generated 2026-10-20T02:54:45+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
+Generated 2026-10-20T20:11:28+00:00 from `ssg-sle16-ds.xml` (profile `xccdf_org.ssgproject.content_profile_pci-dss-4`, MAC: selinux).
 
 Every rule this formula enforces, with its PCI-DSS reference and the concrete action. Sections match the toggles in the MLM Formulas form; the **accounts** category is opt-in (default off).
 
@@ -103,6 +103,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `file_owner_etc_passwd`<br><sub>Verify User Who Owns passwd File</sub> | medium | Req-8.7.c, 2.2.6, 2.2 | manage `/etc/passwd` |
 | `file_owner_etc_shadow`<br><sub>Verify User Who Owns shadow File</sub> | medium | Req-8.7.c, 2.2.6, 2.2 | manage `/etc/shadow` |
 | `file_owner_grub2_cfg`<br><sub>Verify /boot/grub2/grub.cfg User Ownership</sub> | medium | Req-7.1, 2.2.6, 2.2 | manage `/boot/grub2/grub.cfg` |
+| `file_ownership_var_log_audit`<br><sub>System Audit Logs Must Be Owned By Root</sub> | medium | Req-10.5.1, 10.3.2, 10.3 | operational cmd: `G=$(awk -F= '/^log_group/ {gsub(/ /,"",$2); print $2}' /etc/audit/auditd.conf 2>/dev/nu…` |
 | `file_permissions_at_allow`<br><sub>Verify Permissions on /etc/at.allow file</sub> | medium | 2.2.6, 2.2 | manage `/etc/at.allow` (mode 0640) |
 | `file_permissions_backup_etc_group`<br><sub>Verify Permissions on Backup group File</sub> | medium | Req-8.7.c, 2.2.6, 2.2 | manage `/etc/group-` (mode 0644) |
 | `file_permissions_backup_etc_passwd`<br><sub>Verify Permissions on Backup passwd File</sub> | medium | Req-8.7.c, 2.2.6, 2.2 | manage `/etc/passwd-` (mode 0644) |
@@ -120,6 +121,9 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `file_permissions_etc_shadow`<br><sub>Verify Permissions on shadow File</sub> | medium | Req-8.7.c, 2.2.6, 2.2 | manage `/etc/shadow` (mode 0000) |
 | `file_permissions_grub2_cfg`<br><sub>Verify /boot/grub2/grub.cfg Permissions</sub> | medium | 2.2.6, 2.2 | manage `/boot/grub2/grub.cfg` (mode 0600) |
 | `file_permissions_sshd_config`<br><sub>Verify Permissions on SSH Server config file</sub> | medium | 2.2.6, 2.2 | manage `/usr/etc/ssh/sshd_config` (mode 0600) |
+| `file_permissions_sshd_private_key`<br><sub>Verify Permissions on SSH Server Private *_key Key Files</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | operational cmd: `find /etc/ssh -maxdepth 1 -type f -name '*_key' -user root -group root -perm /7177 -exe…` |
+| `file_permissions_sshd_pub_key`<br><sub>Verify Permissions on SSH Server Public *.pub Key Files</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | operational cmd: `find /etc/ssh -maxdepth 1 -type f -name '*.pub' -perm /7133 -exec chmod u-xs,g-xws,o-xw…` |
+| `file_permissions_var_log_audit`<br><sub>System Audit Logs Must Have Mode 0640 or Less Permissive</sub> | medium | Req-10.5, 10.3.1, 10.3 | operational cmd: `G=$(awk -F= '/^log_group/ {gsub(/ /,"",$2); print $2}' /etc/audit/auditd.conf 2>/dev/nu…` |
 | `permissions_local_var_log`<br><sub>Verify permissions of log files</sub> | medium | 10.3.1, 10.3 | operational cmd: `find /var/log/ -perm /u+xs,g+xws,o+xwrt -type f -exec chmod u-xs,g-xws,o-xwrt {} +` |
 
 ## Disabled kernel modules (`kernel_modules`)
@@ -134,6 +138,8 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 
 | Rule | Sev | PCI-DSS | Action |
 |---|---|---|---|
+| `configure_crypto_policy`<br><sub>Configure System Cryptography Policy</sub> | high | 2.2.7, 2.2 | install package `crypto-policies-scripts` |
+| `configure_ssh_crypto_policy`<br><sub>Configure SSH to use System Crypto Policy</sub> | medium | Req-2.2, 2.2.7, 2.2 | operational cmd: `sed -i '/^\s*CRYPTO_POLICY.*$/Id' /etc/sysconfig/sshd` |
 | `sshd_disable_empty_passwords`<br><sub>Disable SSH Access via Empty Passwords</sub> | high | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `PermitEmptyPasswords no` |
 | `sshd_disable_rhosts`<br><sub>Disable SSH Support for .rhosts Files</sub> | medium | 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `IgnoreRhosts yes` |
 | `sshd_disable_root_login`<br><sub>Disable SSH Root Login</sub> | medium | Req-2.2.4, 2.2.6, 2.2 | line in `/etc/ssh/sshd_config.d/00-pci-hardening.conf`: `PermitRootLogin no` |
@@ -161,6 +167,7 @@ Every rule this formula enforces, with its PCI-DSS reference and the concrete ac
 | `chronyd_run_as_chrony_user`<br><sub>Ensure that chronyd is running under chrony user account</sub> | medium | 10.6.3, 10.6 | line in `/etc/sysconfig/chronyd`: `OPTIONS="-u chrony"` |
 | `chronyd_specify_remote_server`<br><sub>A remote time server for Chrony is configured</sub> | medium | Req-10.4.3, 10.6.2, 10.6 | line in `/etc/chrony.conf`: `\g<0>` |
 | `disable_host_auth`<br><sub>Disable Host-Based Authentication</sub> | medium | 8.3.1, 8.3 | line in `/etc/ssh/sshd_config.d/01-complianceascode-reinforce-os-defaults.conf`: `HostbasedAuthentication no` |
+| `gnome_gdm_disable_unattended_automatic_login`<br><sub>Disable GDM Unattended or Automatic Login</sub> | high | 8.3.1, 8.3 | operational cmd: `sed -i 's/^DISPLAYMANAGER_AUTOLOGIN=.*/DISPLAYMANAGER_AUTOLOGIN=""/; s/^DISPLAYMANAGER_…` |
 | `no_direct_root_logins`<br><sub>Direct root Logins Not Allowed</sub> | medium | 8.6.1, 8.6 | manage `/etc/securetty` (mode 0600) |
 | `postfix_network_listening_disabled`<br><sub>Disable Postfix Network Listening</sub> | medium | 1.4.2, 1.4 | line in `/etc/postfix/main.cf`: `inet_interfaces=loopback-only` |
 | `securetty_root_login_console_only`<br><sub>Restrict Virtual Console Root Logins</sub> | medium | 8.6.1, 8.6 | edit `/etc/securetty` |

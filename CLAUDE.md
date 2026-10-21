@@ -25,9 +25,9 @@ Latest full runs of the `pci-dss-4` profile (PCI-DSS v4.0.1) against the upstrea
 | Remediable (coverage denominator) | 238 | 230 |
 | No remediation shipped (detective-only) | 18 | 16 |
 | N/A for this MAC framework | 6 | 1 |
-| **Native coverage** | **216/238 — 90%** | **210/230 — 91%** |
-| Guarded operational states | 23 | 18 |
-| Remediable rules still unmapped | 22 | 20 |
+| **Native coverage** | **223/238 — 93%** | **217/230 — 94%** |
+| Guarded operational states | 29 | 24 |
+| Remediable rules still unmapped | 15 | 13 |
 
 Regenerate with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`. Keep these numbers in sync with the README's "Current coverage" section when handlers change.
 
@@ -116,6 +116,7 @@ An ordered list of functions (`MAPPERS`). Each takes a `RuleInfo` and returns a 
 | `m_audit` | `audit_rules_*`, `audit_*`, + rules using the `rules.d` macro (e.g. `directory_access_var_log_audit`) | `audit` |
 | `m_auditd_conf` | `auditd_*` (auditd.conf / audisp plugin `key = value`) | `audit` |
 | `m_pam` | PAM module-arg rules using CaC's `VALUES/VALUE_NAMES/ARGS` macro (cracklib pwquality, `pam_unix` hashing, `pam_wheel`) | `pam` |
+| `m_file_hygiene` | `file_permissions_sshd_private_key`/`_pub_key`, `file_permissions_var_log_audit`, `file_ownership_var_log_audit` (find-guarded chmod/chown; `permissions`); `configure_crypto_policy` (installs `crypto-policies-scripts`, then `update-crypto-policies --set`), `configure_ssh_crypto_policy` (`sshd`); `gnome_gdm_disable_unattended_automatic_login` (`lineinfile`, only if `gdm` installed) | `permissions` / `sshd` / `lineinfile` |
 | `m_faillock` | `accounts_passwords_pam_faillock_{deny,unlock_time}` (**usr-etc/SLE16+ only**: SLE 15's PAM 1.3.0 has no `pam_faillock.so`) — `faillock.conf` key + CaC's `pam_faillock` lines in `common-auth`/`common-account` | `pam` |
 | `m_account_hygiene` | `no_empty_passwords` (drop `nullok`), `ensure_shadow_group_empty`, `ensure_pam_wheel_group_empty`, `set_password_hashing_algorithm_systemauth` (`pam`); `no_empty_passwords_etc_shadow`, `accounts_no_uid_except_zero`, `no_shelllogin_for_systemaccounts` (opt-in `accounts`) | `pam` / `accounts` |
 | `m_pwquality` | SLE16-style `accounts_password_pam_*` that edit `/etc/security/pwquality.conf` (seeded from `/usr/lib/security/pwquality.conf`) | `pam` |

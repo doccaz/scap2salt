@@ -3,10 +3,10 @@
 Source datastream: `ssg-sle15-ds.xml`
 Profile: `xccdf_org.ssgproject.content_profile_pci-dss-4`
 MAC framework: `apparmor`
-Generated: 2026-10-20T02:54:44+00:00
+Generated: 2026-10-20T20:11:27+00:00
 
-Coverage: **216/238** remediable rules mapped to native Salt (91%).
-22 unmapped (`UNMAPPED.md`); 18 ship no remediation (`NO_REMEDIATION.md`); 6 not applicable to this MAC (`SKIPPED_NA.md`, equivalence in `MAC_EQUIVALENCE.md`).
+Coverage: **223/238** remediable rules mapped to native Salt (94%).
+15 unmapped (`UNMAPPED.md`); 18 ship no remediation (`NO_REMEDIATION.md`); 6 not applicable to this MAC (`SKIPPED_NA.md`, equivalence in `MAC_EQUIVALENCE.md`).
 
 ## Layout
 - `init.sls` — includes every category below
