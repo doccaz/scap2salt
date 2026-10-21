@@ -1092,6 +1092,14 @@ def m_rpm(r):
     return None
 
 
+_PAM_UNIX_COUNT = r"""$(grep -cE '^\s*auth\s+\S+\s+pam_unix\.so' /etc/pam.d/common-auth)"""
+_PAM_UNIX_SINGLE = f'test "{_PAM_UNIX_COUNT}" -le 1'
+_PAM_UNIX_DUP = f'test "{_PAM_UNIX_COUNT}" -gt 1'
+_PAM_UNIX_DUP_MSG = ("scap2salt: /etc/pam.d/common-auth has more than one pam_unix auth line (left by an older "
+                     "run or a manual edit). Not touching it: remove the extra line (and from common-auth-pc), "
+                     "keep a single 'auth sufficient pam_unix.so sha512 try_first_pass', then re-run the highstate.")
+
+
 @mapper
 def m_auditd_conf(r):
     """auditd.conf / audisp plugin key=value settings (not rules.d fragments)."""
@@ -1178,6 +1186,17 @@ def m_pam(r):
         "pam", r,
     )
     st.operational = True
+    if pam_file == "/etc/pam.d/common-auth" and mod == "unix" and ltype == "auth":
+        # A second pam_unix auth line (older scap2salt run, hand edit) would make the
+        # converge logic above append yet another line and, once satisfied, hide the
+        # problem from every later highstate. Leave the file alone and fail loudly.
+        # (On usr-etc targets the faillock check covers the same condition.)
+        st.args.append(("onlyif", _PAM_UNIX_SINGLE))
+        if not sshd_uses_dropin():
+            st.extra_states.append((
+                "pam_unix_auth_check", "cmd.run",
+                [("name", f"echo {shlex.quote(_PAM_UNIX_DUP_MSG)}; exit 1"),
+                 ("onlyif", _PAM_UNIX_DUP)]))
     return st
 
 
@@ -2907,7 +2926,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.18", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.19", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -3136,8 +3155,8 @@ def main():
                          "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.18",
-                    help="Version for the formula RPM (default: 1.0.18)")
+    ap.add_argument("--pkg-version", default="1.0.19",
+                    help="Version for the formula RPM (default: 1.0.19)")
     args = ap.parse_args()
 
     CONFIG["target"] = args.target
