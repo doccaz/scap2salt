@@ -98,6 +98,18 @@ Coverage by category:
 | File integrity (AIDE) | 2 | 2 |
 | Resource limits (security/limits.d) | 1 | 1 |
 
+### Measured results on lab hosts
+
+`oscap xccdf eval` with the `pci-dss-4` profile, using the same CaC v0.1.82 datastream the states were generated from, after a clean highstate of the current formula (1.0.18) on lab VMs (Oct 2026):
+
+| Host | Pass | Fail | Pass rate (pass / pass+fail) | Remaining failures |
+|---|---|---|---|---|
+| SLE 15 SP7 (AppArmor) | 231 | 9 | 96% | `selinux_state` and `selinux_policytype` (SELinux-only; AppArmor equivalents ship in `mac.sls`), `rpm_verify_permissions`, `ensure_suse_gpgkey_installed`, plus the shared list below |
+| SLE 16 (SELinux), clean-ish VM | 220 | 9 | 96% | the shared list below, plus the two [by-design SLE 16 rules](#sle-16-rules-that-fail-a-scan-by-design) |
+| SLE 16 (SELinux), long-lived lab VM | 217 | 12 | 95% | as above, plus 3 filesystem-hygiene findings specific to that VM (world-writable file, unowned/ungrouped files) |
+
+Shared across hosts: `display_login_attempts` (upstream fix is a no-op on SUSE), `ensure_firewall_rules_for_open_ports` and `set_firewalld_default_zone` (site-specific, no upstream fix), and the opt-in `sudo_require_authentication` and `accounts_password_set_max_life_existing`. `sshd_limit_user_access` stays red until you fill the SSH allow-list fields. SLE 16 also shows `selinux_confinement_of_daemons`, which cannot be satisfied on a stock install. A further 15-20 rules per host are not applicable and 2-3 are not checked.
+
 Regenerate these numbers any time with `./scap2salt.py --report-only` (SLE 15) or `./scap2salt.py --target sle16 --report-only` (SLE 16); each writes `out/coverage-report.md`.
 
 ## Deviations from upstream CaC
