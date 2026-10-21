@@ -3,7 +3,7 @@
 Source datastream: `ssg-sle16-ds.xml`
 Profile: `xccdf_org.ssgproject.content_profile_pci-dss-4`
 MAC framework: `selinux`
-Generated: 2026-10-21T19:40:18+00:00
+Generated: 2026-10-21T20:06:16+00:00
 
 Coverage: **223/230** remediable rules mapped to native Salt (97%).
 7 unmapped (`UNMAPPED.md`); 16 ship no remediation (`NO_REMEDIATION.md`); 1 not applicable to this MAC (`SKIPPED_NA.md`).
@@ -14,6 +14,7 @@ Coverage: **223/230** remediable rules mapped to native Salt (97%).
 - `_verify/oscap_scan.sh` — read-only oscap report
 - `_verify/salt_verify.sh` — `state.apply test=True` drift check
 - `_verify/oscap_remediate.sh` — independent oscap remediation (cross-check)
+- `_verify/pam_regression.sh` — behavioural PAM test: wrong passwords refused on login/sshd/sudo/passwd, `su`/`su -` restricted to the pam_wheel group (run as root after the highstate; exit code = failures)
 
 ## Rules that fail an oscap scan by design
 

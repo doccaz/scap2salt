@@ -37,6 +37,7 @@ out/srv/
 │       └── _verify/
 │           ├── oscap_scan.sh      # read-only compliance scan
 │           ├── salt_verify.sh     # state.apply test=True drift check
+│           ├── pam_regression.sh  # behavioural PAM test (wrong passwords refused, su/su - restricted)
 │           └── oscap_remediate.sh # independent oscap remediation (cross-check)
 ├── pillar/
 │   ├── top.sls
@@ -173,6 +174,20 @@ chooses package integrity. The same notice is generated into the formula's
 ### PAM auth-stack safety (SLE 15)
 
 CaC's `set_password_hashing_algorithm_commonauth` rewrites the `pam_unix.so` auth line of `common-auth` from `required` to `sufficient`. On SLE 16 the `pam_faillock` stack that follows makes that safe; SLE 15 has no equivalent, so the formula appends a closing `auth required pam_deny.so`. Without it any `required` auth module that succeeds elsewhere in a service's stack (for example the `pam_tally2` line the lockout rule adds to `/etc/pam.d/login`) would accept a wrong password; this was reproduced and fixed during testing. The `su` restriction (`use_pam_wheel_group_for_su`) is likewise placed **before** the `common-auth` include, and on SLE 16 `/etc/pam.d/su` is seeded from the vendor file instead of being created with a single line. `su -` runs the `su-l` service, which the upstream rule does not touch; the formula applies the same restriction there as a deliberate extra, so non-root users cannot `su` or `su -` unless they belong to `sugroup` (root and `sudo` are unaffected; scans are not affected either).
+
+### Rules deliberately left unmapped
+
+The remaining unmapped rules (7 on each target) are skipped on purpose; each is also explained in the generated `UNMAPPED.md`.
+
+| Rule | Why it is not automated |
+|---|---|
+| `rpm_verify_hashes` | the upstream fix reinstalls every package with a failing `rpm -Va` hash, which can overwrite legitimate local changes |
+| `security_patches_up_to_date` | runs `zypper patch -g security`; patching during a highstate can restart services or need a reboot, and belongs in MLM patch management |
+| `file_permissions_unauthorized_world_writable` | strips `o+w` from every file on every local filesystem; may break applications, fix the offenders case by case |
+| `network_sniffer_disabled` | switches promiscuous mode and multicast off on all interfaces, breaking bridges, container/VM networking and packet capture |
+| `wireless_disable_interfaces` | installs NetworkManager and switches radios off; site-specific, servers without wireless hardware already comply |
+| `display_login_attempts` | unsatisfiable on SUSE: the upstream fix edits `pam_lastlog2`, which SLE 15/16 do not use |
+| `dir_perms_world_writable_sticky_bits` | a *candidate* for mapping (adds the sticky bit, low risk), not done yet because the upstream fix walks every filesystem on each run |
 
 ### Form transparency
 

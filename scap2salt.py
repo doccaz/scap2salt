@@ -3143,7 +3143,7 @@ the pillar from the form. (The standalone `top.sls`/`pillar/` tree under
 """
 
 
-def emit_package(outdir, meta, mac, version="1.0.21", release="0"):
+def emit_package(outdir, meta, mac, version="1.0.22", release="0"):
     """Build a SUSE/MLM Salt formula RPM from the generated tree.
 
     Stages the canonical salt-formulas layout, writes a .spec + source tarball +
@@ -3222,6 +3222,92 @@ def _build_rpm(pkgdir, spec_path, tarball, version, release):
     return rpms[0] if rpms else None
 
 
+PAM_REGRESSION = r'''#!/bin/sh
+# PAM behaviour regression test. Run as root on a hardened minion AFTER the highstate.
+# Creates two throwaway users, checks that WRONG passwords are refused on every service
+# that uses common-auth, that a correct one works, and that the pam_wheel restriction on
+# `su` / `su -` (service su-l) holds. Cleans up after itself. Exit code = number of FAILs.
+# (A scan can be green while a stack is open: this checks real behaviour, not file text.)
+set -u
+[ "$(id -u)" = 0 ] || { echo "run as root" >&2; exit 2; }
+command -v python3 >/dev/null || { echo "python3 required" >&2; exit 2; }
+T=$(mktemp -d); chmod 755 "$T"
+A=s2sreg_a$$; B=s2sreg_b$$; PW=$(head -c 18 /dev/urandom | base64 | tr -d '=+/'); FAIL=0
+cleanup() { pkill -u "$A" 2>/dev/null; pkill -u "$B" 2>/dev/null; sleep 1
+  userdel -rf "$A" >/dev/null 2>&1; userdel -rf "$B" >/dev/null 2>&1; rm -rf "$T"; }
+trap cleanup EXIT INT TERM
+ok()   { echo "PASS  $1"; }
+bad()  { echo "FAIL  $1"; FAIL=$((FAIL+1)); }
+skip() { echo "SKIP  $1"; }
+
+cat > "$T/pamt.py" <<'EOF'
+import ctypes, ctypes.util, sys
+pam=ctypes.CDLL(ctypes.util.find_library("pam")); libc=ctypes.CDLL(ctypes.util.find_library("c"))
+class M(ctypes.Structure): _fields_=[("msg_style",ctypes.c_int),("msg",ctypes.c_char_p)]
+class R(ctypes.Structure): _fields_=[("resp",ctypes.c_char_p),("resp_retcode",ctypes.c_int)]
+CONV=ctypes.CFUNCTYPE(ctypes.c_int,ctypes.c_int,ctypes.POINTER(ctypes.POINTER(M)),ctypes.POINTER(ctypes.POINTER(R)),ctypes.c_void_p)
+class C(ctypes.Structure): _fields_=[("conv",CONV),("data",ctypes.c_void_p)]
+user,pw,svc=sys.argv[1],sys.argv[2].encode(),sys.argv[3].encode()
+libc.calloc.restype=ctypes.c_void_p; libc.strdup.restype=ctypes.c_void_p
+def cb(n,msg,resp,_):
+    arr=libc.calloc(n,ctypes.sizeof(R)); resp[0]=ctypes.cast(arr,ctypes.POINTER(R))
+    for i in range(n):
+        if msg[i].contents.msg_style in (1,2):
+            ctypes.memmove(arr+i*ctypes.sizeof(R),ctypes.byref(ctypes.c_void_p(libc.strdup(pw))),8)
+    return 0
+c=C(CONV(cb),None); h=ctypes.c_void_p()
+assert pam.pam_start(svc,user.encode(),ctypes.byref(c),ctypes.byref(h))==0
+r=pam.pam_authenticate(h,0); pam.pam_end(h,0); sys.exit(1 if r else 0)
+EOF
+cat > "$T/su.py" <<'EOF'
+import pty,os,sys,time,select
+user,pw,login=sys.argv[1],sys.argv[2],sys.argv[3]=="login"
+pid,fd=pty.fork()
+if pid==0:
+    os.execvp("su",["su"]+(["-"] if login else [])+[user,"-c","echo SU_OK"])
+buf=b""; sent=False; end=time.time()+15
+while time.time()<end:
+    r,_,_=select.select([fd],[],[],1)
+    if r:
+        try: d=os.read(fd,4096)
+        except OSError: break
+        if not d: break
+        buf+=d
+        if b"assword" in buf and not sent: os.write(fd,(pw+"\n").encode()); sent=True
+sys.exit(0 if b"SU_OK" in buf else 1)
+EOF
+chmod 644 "$T"/*.py
+
+useradd -m "$A" && useradd -m "$B" && echo "$B:$PW" | chpasswd || { echo "cannot create test users" >&2; exit 2; }
+pamok()  { python3 "$T/pamt.py" "$B" "$1" "$2" >/dev/null 2>&1; }
+
+echo "== authentication through common-auth (wrong password must be refused)"
+for svc in login sshd sudo passwd; do
+  if [ -e /etc/pam.d/$svc ] || [ -e /usr/lib/pam.d/$svc ]; then
+    if pamok "bad-$PW" $svc; then bad "$svc ACCEPTED a wrong password"; else ok "$svc refuses a wrong password"; fi
+  else skip "$svc: no PAM service file"; fi
+done
+if pamok "$PW" sshd; then ok "sshd accepts the correct password"; else bad "sshd refused the correct password"; fi
+
+echo "== su / su - restriction (pam_wheel group)"
+G=$(grep -hE '^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_wheel\.so' /etc/pam.d/su 2>/dev/null | sed -n 's/.*group=\([^ ]*\).*/\1/p' | head -1)
+if [ -z "$G" ] || ! getent group "$G" >/dev/null; then
+  skip "su restriction not configured (no pam_wheel group=...)"
+else
+  for mode in su login; do
+    n="su"; [ $mode = login ] && n="su -"
+    gpasswd -d "$A" "$G" >/dev/null 2>&1
+    if runuser -u "$A" -- python3 "$T/su.py" "$B" "$PW" $mode; then bad "$n: user OUTSIDE $G could switch user"; else ok "$n: user outside $G is refused"; fi
+    usermod -aG "$G" "$A"
+    if runuser -u "$A" -- python3 "$T/su.py" "$B" "$PW" $mode; then ok "$n: member of $G can switch user"; else bad "$n: member of $G was refused (su stack broken?)"; fi
+    if runuser -u "$A" -- python3 "$T/su.py" "$B" "bad-$PW" $mode; then bad "$n: wrong password ACCEPTED"; else ok "$n: wrong password refused"; fi
+  done
+fi
+echo; [ "$FAIL" = 0 ] && echo "RESULT: all checks passed" || echo "RESULT: $FAIL check(s) FAILED"
+exit "$FAIL"
+'''
+
+
 def emit_verify(state_dir, src, profile_id, meta):
     d = os.path.join(state_dir, "_verify")
     ds = os.path.basename(src)
@@ -3253,10 +3339,39 @@ oscap xccdf eval --profile "{profile_id}" --remediate \\
   --results-arf /var/log/pci_dss-remediate-arf.xml "$DS" || true
 """
     write(os.path.join(d, "oscap_scan.sh"), scan)
+    write(os.path.join(d, "pam_regression.sh"), PAM_REGRESSION)
     write(os.path.join(d, "salt_verify.sh"), sverify)
     write(os.path.join(d, "oscap_remediate.sh"), remediate)
-    for f in ("oscap_scan.sh", "salt_verify.sh", "oscap_remediate.sh"):
+    for f in ("oscap_scan.sh", "salt_verify.sh", "oscap_remediate.sh", "pam_regression.sh"):
         os.chmod(os.path.join(d, f), 0o755)
+
+
+# Why each remaining unmapped rule stays that way (shown in UNMAPPED.md and the README).
+# "unsafe" = the upstream fix is a broad or disruptive change that should not run unattended;
+# "unsatisfiable" = the upstream fix cannot make the check pass on SUSE; "candidate" = could be mapped.
+UNMAPPED_NOTES = {
+    "rpm_verify_hashes": (
+        "unsafe: the upstream fix reinstalls every package whose files fail `rpm -Va` "
+        "(`zypper install -f`), which can overwrite legitimate local changes. Review `rpm -Va --noconfig` by hand."),
+    "security_patches_up_to_date": (
+        "unsafe: the upstream fix runs `zypper patch -g security`. Patching during a highstate can restart "
+        "services or require a reboot, and patch management belongs in MLM (channels, CLM, scheduled patch jobs)."),
+    "file_permissions_unauthorized_world_writable": (
+        "unsafe: strips `o+w` from every regular file on every local filesystem. That can break applications "
+        "that rely on world-writable files; fix the offenders it reports (`find / -xdev -type f -perm -002`) case by case."),
+    "dir_perms_world_writable_sticky_bits": (
+        "candidate: adds the sticky bit to world-writable directories (low risk), but the fix walks every local "
+        "filesystem on each run. Not mapped yet; a bounded, find-guarded state could be added."),
+    "network_sniffer_disabled": (
+        "unsafe: turns promiscuous mode and multicast off on every interface (`ip link set ... promisc off`), "
+        "which breaks bridges, container/VM networking and packet capture. Hosts that must not sniff should be fixed by design."),
+    "wireless_disable_interfaces": (
+        "unsafe/site-specific: installs NetworkManager and switches radios off (`nmcli radio all off`), changing "
+        "the network stack. Servers without wireless hardware already comply; handle wireless hosts individually."),
+    "display_login_attempts": (
+        "unsatisfiable: the upstream fix only edits `pam_lastlog2` (authselect), which SLE 15 and SLE 16 do not "
+        "use (SLE 16 uses `pam_wtmpdb`), so the remediation is a no-op and the rule cannot pass."),
+}
 
 
 def emit_unmapped(state_dir, unmapped, meta, profile_id):
@@ -3274,6 +3389,8 @@ def emit_unmapped(state_dir, unmapped, meta, profile_id):
         for r in sorted(by_fam[fam], key=lambda x: x.short):
             pci = ", ".join(r.pci_refs()) or "-"
             lines.append(f"- `{r.short}` — {r.title} (PCI {pci}; sev {r.severity})")
+            if r.short in UNMAPPED_NOTES:
+                lines.append(f"  - {UNMAPPED_NOTES[r.short]}")
         lines.append("")
     write(os.path.join(state_dir, "UNMAPPED.md"), "\n".join(lines))
 
@@ -3326,6 +3443,7 @@ Coverage: **{len(mapped)}/{total}** remediable rules mapped to native Salt ({pct
 - `_verify/oscap_scan.sh` — read-only oscap report
 - `_verify/salt_verify.sh` — `state.apply test=True` drift check
 - `_verify/oscap_remediate.sh` — independent oscap remediation (cross-check)
+- `_verify/pam_regression.sh` — behavioural PAM test: wrong passwords refused on login/sshd/sudo/passwd, `su`/`su -` restricted to the pam_wheel group (run as root after the highstate; exit code = failures)
 
 {chr(10).join(by_design_md(mapped))}
 ## Deploy on Multi-Linux Manager
@@ -3372,8 +3490,8 @@ def main():
                          "formulas side by side, e.g. pci_dss_sle15 / pci_dss_sle16.")
     ap.add_argument("--package", action="store_true",
                     help="Also build an MLM Salt formula RPM under out/package/")
-    ap.add_argument("--pkg-version", default="1.0.21",
-                    help="Version for the formula RPM (default: 1.0.21)")
+    ap.add_argument("--pkg-version", default="1.0.22",
+                    help="Version for the formula RPM (default: 1.0.22)")
     args = ap.parse_args()
 
     CONFIG["target"] = args.target

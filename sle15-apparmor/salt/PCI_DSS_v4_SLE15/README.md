@@ -3,7 +3,7 @@
 Source datastream: `ssg-sle15-ds.xml`
 Profile: `xccdf_org.ssgproject.content_profile_pci-dss-4`
 MAC framework: `apparmor`
-Generated: 2026-10-21T19:40:17+00:00
+Generated: 2026-10-21T20:06:15+00:00
 
 Coverage: **231/238** remediable rules mapped to native Salt (97%).
 7 unmapped (`UNMAPPED.md`); 18 ship no remediation (`NO_REMEDIATION.md`); 6 not applicable to this MAC (`SKIPPED_NA.md`, equivalence in `MAC_EQUIVALENCE.md`).
@@ -14,6 +14,7 @@ Coverage: **231/238** remediable rules mapped to native Salt (97%).
 - `_verify/oscap_scan.sh` — read-only oscap report
 - `_verify/salt_verify.sh` — `state.apply test=True` drift check
 - `_verify/oscap_remediate.sh` — independent oscap remediation (cross-check)
+- `_verify/pam_regression.sh` — behavioural PAM test: wrong passwords refused on login/sshd/sudo/passwd, `su`/`su -` restricted to the pam_wheel group (run as root after the highstate; exit code = failures)
 
 
 ## Deploy on Multi-Linux Manager

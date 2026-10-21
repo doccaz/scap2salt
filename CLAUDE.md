@@ -308,7 +308,7 @@ Two **optional pillar keys** (list editors in the MLM form via `$type: edit-grou
 - OVAL checks are not parsed; the script relies entirely on XCCDF rule metadata and bash fix scripts for value extraction.
 - Bash fix extraction uses regex heuristics — unusual bash in a fix script may produce `None` and fall through to `UNMAPPED.md`.
 - Multi-value sysctl rules (rare) produce one state per rule; no deduplication.
-- `rpm_verify_hashes` is deliberately left unmapped — its only automated remediation (reinstalling packages) is unsafe to run autonomously; it is listed in `UNMAPPED.md` for manual review.
+- Seven remediable rules are deliberately unmapped on both targets (`rpm_verify_hashes`, `security_patches_up_to_date`, `file_permissions_unauthorized_world_writable`, `network_sniffer_disabled`, `wireless_disable_interfaces`, `display_login_attempts`, `dir_perms_world_writable_sticky_bits`); the reasons live in `UNMAPPED_NOTES` in `scap2salt.py` (rendered into `UNMAPPED.md`) and in the README. The sticky-bit rule is the only mapping candidate.
 - PCI-DSS v3 does not exist as a profile for SLE in ComplianceAsCode — only `pci-dss-4` (v4.0.1) ships for SUSE targets. The `--profile` flag accepts any ID, so a RHEL datastream with a v3 profile still works if needed.
 - SLE 16 does not ship native Salt packages; MLM/Uyuni manages SLE 16 clients via its bundled minion. Confirm your CaC release ships `ssg-sle16-ds.xml` before targeting `--target sle16`.
 - `--report-only` coverage numbers for `lineinfile`, `audit`, `sshd`, and `dconf` are projections from CaC's deterministic macro idioms — true numbers only appear when running against a real `ssg-*-ds.xml`.
